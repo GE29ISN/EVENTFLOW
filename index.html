@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -1971,6 +1972,10 @@ function getUsedMetiers(ev){
 // =============================================
 // AFFICHAGE DU PLANNING (Horaires Dynamiques)
 // =============================================
+
+// =============================================
+// AFFICHAGE DU PLANNING (Horaires Dynamiques & Catering)
+// =============================================
 function renderPlanning() {
   const ev = STORE.getEvent(currentEventId);
   if (!ev) return;
@@ -1994,30 +1999,32 @@ function renderPlanning() {
     <div class="planning-container">`;
 
   days.forEach(day => {
-    // 1. CALCUL DYNAMIQUE DES HORAIRES POUR CE JOUR
+    // 1. CALCUL DYNAMIQUE DES HORAIRES (Sécurisé)
     const dayTasks = (ev.planning || []).filter(t => t && t.day === day);
+    const dayMeals = (ev.catering || []).filter(m => m && m.day === day && m.time); 
+    
     let minHour = 24; 
     let maxHour = 6;
 
-    if (dayTasks.length > 0) {
-      dayTasks.forEach(t => {
-        if (!t.timeStart || !t.timeEnd) return;
+    const allItems = [...dayTasks, ...dayMeals.map(m => ({ timeStart: m.time, timeEnd: m.time }))];
+
+    if (allItems.length > 0) {
+      allItems.forEach(t => {
+        if (!t.timeStart) return;
         const [sh] = t.timeStart.split(':').map(Number);
-        const [eh, em] = t.timeEnd.split(':').map(Number);
-        
-        // Gestion des heures après minuit (ex: 02h00 -> 26)
+        const ehStr = t.timeEnd || t.timeStart; 
+        const [eh, em] = ehStr.split(':').map(Number);
+
         let sH = sh < 6 ? sh + 24 : sh;
         let eH = eh < 6 ? eh + 24 : eh;
-        if (em > 0) eH += 1; // Si ça finit à 14h30, on englobe jusqu'à 15h
-        
+        if (em > 0) eH += 1; 
+
         if (sH < minHour) minHour = sH;
         if (eH > maxHour) maxHour = eH;
       });
-      // Ajout d'une marge d'1h avant et après
       minHour -= 1;
       maxHour += 1;
     } else {
-      // S'il n'y a aucune tâche, horaires par défaut
       minHour = 8;
       maxHour = 20;
     }
@@ -2026,16 +2033,16 @@ function renderPlanning() {
     const END_HOUR = maxHour;
     const TOTAL_HOURS = END_HOUR - START_HOUR;
 
-    // 2. GÉNÉRATION DE L'AFFICHAGE DU JOUR
+    // 2. GÉNÉRATION DE LA GRILLE DU JOUR
     html += `
       <div class="planning-day-section">
         <div class="planning-day-title">📆 ${formatDate(day)}</div>
         <div class="planning-body">
           <div class="planning-time-col">`;
-    
+
     for (let h = START_HOUR; h < END_HOUR; h++) {
       const displayH = h >= 24 ? h - 24 : h;
-      html += `<div class="planning-time-slot" style="height:${HOUR_H}px; display:flex; align-items:flex-start; justify-content:center; box-sizing:border-box; margin:0; padding:0;">
+      html += `<div class="planning-time-slot" style="height:${HOUR_H}px; display:flex; align-items:flex-start; justify-content:flex-end; padding-right:8px; box-sizing:border-box; margin:0;">
                  <span style="position:relative; top:-8px;">${String(displayH).padStart(2, '0')}:00</span>
                </div>`;
     }
@@ -2045,19 +2052,19 @@ function renderPlanning() {
     metiers.forEach(metier => {
       const colId = `col-${day.replace(/-/g,'')}-${metier.replace(/\s+/g,'')}`;
       
-      // On passe START_HOUR dans la fonction onclick pour que le clic ajoute l'événement à la bonne heure
       html += `<div class="planning-col" id="${colId}" onclick="planningColClick(event,'${day}','${metier}', ${START_HOUR})">
         <div class="planning-col-header" style="color:${METIER_COLORS[metier]||'#fff'}">${METIER_LABELS[metier]||metier}</div>
         <div class="planning-col-lines">
           ${Array(TOTAL_HOURS).fill(0).map((_,i)=>`<div class="planning-hour-line" style="top:${i*HOUR_H}px; height:${HOUR_H}px"></div>`).join('')}
         </div>`;
         
-      let colTasks = (ev.planning || []).filter(t => t && t.day === day && ((t.metiers && t.metiers.includes(metier)) || t.metier === metier));
+      let colTasks = dayTasks.filter(t => (t.metiers && t.metiers.includes(metier)) || t.metier === metier);
       
       colTasks.sort((a, b) => {
+        if (!a.timeStart || !b.timeStart) return 0;
         const getDur = (t) => {
           const [h1, m1] = t.timeStart.split(':').map(Number);
-          const [h2, m2] = t.timeEnd.split(':').map(Number);
+          const [h2, m2] = (t.timeEnd || t.timeStart).split(':').map(Number);
           let start = (h1 < 6 ? h1 + 24 : h1) * 60 + m1;
           let end = (h2 < 6 ? h2 + 24 : h2) * 60 + m2;
           return end - start;
@@ -2065,51 +2072,71 @@ function renderPlanning() {
         return getDur(b) - getDur(a);
       });
       
+      // AFFICHAGE TÂCHES STANDARD
       colTasks.forEach((task, index) => {
+        if (!task.timeStart) return;
         const [sh, sm] = task.timeStart.split(':').map(Number);
-        const [eh, em] = task.timeEnd.split(':').map(Number);
+        const [eh, em] = (task.timeEnd || task.timeStart).split(':').map(Number);
         
         let sH = sh < 6 ? sh + 24 : sh;
         let eH = eh < 6 ? eh + 24 : eh;
-
-        const startMin = (sH * 60 + sm) - (START_HOUR * 60);
-        const endMin = (eH * 60 + em) - (START_HOUR * 60);
-        const top = (startMin / 60 * HOUR_H) + 30; 
         
-        const height = Math.max(20, (endMin - startMin) / 60 * HOUR_H);
+        const top = ((sH * 60 + sm) - (START_HOUR * 60)) / 60 * HOUR_H + 30; 
+        const height = Math.max(20, ((eH * 60 + em) - (sH * 60 + sm)) / 60 * HOUR_H);
+        
         const textColor = isLightColor(task.color) ? '#000' : '#fff';
-        
-        const clickAction = task.isMeal ? `openMealModal('${task.id}')` : `openTaskModal('${task.id}')`;
         const zIndex = 10 + index;
 
         html += `
-          <div class="planning-task" style="top:${top}px; height:${height}px; background:${task.color}; color:${textColor}; z-index:${zIndex}; border: ${task.isMeal ? '2px dashed rgba(255,255,255,0.5)' : '1px solid rgba(0,0,0,0.2)'}; overflow: hidden; display:flex; flex-direction:column; justify-content:center; padding: 2px 4px; box-sizing: border-box;" onclick="event.stopPropagation(); ${clickAction}">
+          <div class="planning-task" style="top:${top}px; height:${height}px; background:${task.color}; color:${textColor}; z-index:${zIndex}; border: 1px solid rgba(0,0,0,0.2); overflow: hidden; display:flex; flex-direction:column; justify-content:center; padding: 2px 4px; box-sizing: border-box;" onclick="event.stopPropagation(); openTaskModal('${task.id}')">
             
             <div style="display:flex; justify-content:space-between; align-items:center; gap:4px; width:100%;">
-              
               <div style="flex:1; display:flex; align-items:center; gap:4px; overflow:hidden; white-space:nowrap;">
                  <span class="drag-handle" style="cursor:grab; opacity:0.7; font-size:0.8rem;">☰</span>
                  <strong style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; flex-shrink:0;">${task.timeStart}-${task.timeEnd}</strong>
                  <span style="font-weight:600; font-size:0.75rem; overflow:hidden; text-overflow:ellipsis;">${task.title}</span>
               </div>
-
               <div style="display:flex; gap:3px; flex-shrink:0;">
-                ${!task.isMeal ? `<button class="btn" style="padding:1px 4px; background:rgba(0,0,0,0.15); border:none; color:inherit; font-size:10px; cursor:pointer; border-radius:3px;" onclick="event.stopPropagation(); openTaskModal('${task.id}', null, null, null, null, true)" title="Dupliquer">👯</button>` : ''}
-                ${!task.isMeal ? `<button class="btn" style="padding:1px 4px; background:var(--error); border:none; color:white; font-size:10px; cursor:pointer; border-radius:3px;" onclick="event.stopPropagation(); deleteTask('${task.id}')" title="Supprimer">🗑️</button>` : ''}
+                <button class="btn" style="padding:1px 4px; background:rgba(0,0,0,0.15); border:none; color:inherit; font-size:10px; cursor:pointer; border-radius:3px;" onclick="event.stopPropagation(); openTaskModal('${task.id}', null, null, null, null, true)" title="Dupliquer">👯</button>
+                <button class="btn" style="padding:1px 4px; background:var(--error); border:none; color:white; font-size:10px; cursor:pointer; border-radius:3px;" onclick="event.stopPropagation(); deleteTask('${task.id}')" title="Supprimer">🗑️</button>
               </div>
             </div>
-            
             ${task.notes ? `<div style="font-size: 0.65rem; opacity: 0.85; white-space: nowrap; overflow:hidden; text-overflow:ellipsis; padding-left: 18px; margin-top: 2px;">${task.notes}</div>` : ''}
-            
           </div>`;
       });
-      html += `</div>`;
+
+      // AFFICHAGE REPAS (CATERING) - Z-INDEX 500 POUR PASSER AU-DESSUS
+      let colMeals = dayMeals.filter(m => (m.persons || []).some(pid => {
+        const p = (ev.personnel || []).find(pers => pers.id === pid);
+        return p && p.metier === metier;
+      }));
+
+      colMeals.forEach((meal) => {
+        if (!meal.time) return;
+        const [sh, sm] = meal.time.split(':').map(Number);
+        let sH = sh < 6 ? sh + 24 : sh;
+        const startMin = (sH * 60 + sm) - (START_HOUR * 60);
+        const top = (startMin / 60 * HOUR_H) + 30;
+        
+        html += `
+          <div class="planning-task" style="top:${top}px; height:40px; background:#10B981; color:white; z-index:500; border: 2px dashed rgba(255,255,255,0.6); overflow: hidden; display:flex; align-items:center; justify-content:space-between; padding: 0 8px; box-sizing: border-box; box-shadow: 0 2px 8px rgba(0,0,0,0.3);" onclick="event.stopPropagation(); openMealModal('${meal.id}')">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-size:1.2rem;">🍴</span>
+              <div style="display:flex; flex-direction:column; line-height:1.1">
+                <strong style="font-size:0.7rem; font-family:'JetBrains Mono',monospace;">${meal.time}</strong>
+                <span style="font-weight:800; font-size:0.75rem; text-transform:uppercase;">${meal.type}</span>
+              </div>
+            </div>
+          </div>`;
+      });
+
+      html += `</div>`; // Fin .planning-col
     });
 
-    html += `</div></div></div>`;
+    html += `</div></div></div>`; // Fin layout
   });
 
-  html += `</div>`;
+  html += `</div>`; // Fin container
   tc.innerHTML = html;
 
   // Initialisation SortableJS
@@ -2120,7 +2147,6 @@ function renderPlanning() {
     });
   });
 }
-
 
 
 function isLightColor(hex){
