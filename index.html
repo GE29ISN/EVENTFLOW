@@ -1,29 +1,10 @@
 
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EVENTFLOW</title>
-
-<!-- 1. CHARGEMENT DE FIREBASE (Les scripts dont j'ai parlé) -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-    
-    <script>
-      const firebaseConfig = {
-        apiKey: "AIzaSyC5rzLguVUCYHSAzkkGSUOBEMFhZZNGRto",
-        authDomain: "eventflow-58db8.firebaseapp.com",
-        projectId: "eventflow-58db8",
-        storageBucket: "eventflow-58db8.firebasestorage.app",
-        messagingSenderId: "834954392218",
-        appId: "1:834954392218:web:7e76640c196371418f6523"
-      };
-      firebase.initializeApp(firebaseConfig);
-      const db = firebase.firestore();
-    </script>
-
 <style>
 :root {
   --primary:#4F46E5;--primary-dark:#3730A3;--secondary:#7C3AED;--accent:#A78BFA;
@@ -277,7 +258,7 @@ textarea.form-control{resize:vertical;min-height:80px}
         <h2 id="evtTitle">Événement</h2>
       </div>
       <div style="display:flex;gap:8px">
-       <button class="btn btn-secondary btn-sm" onclick="generateShareLink(event)">🔗 Lien technicien</button>
+        <button class="btn btn-secondary btn-sm" onclick="generateShareLink()">🔗 Lien technicien</button>
         <button class="btn btn-primary btn-sm" onclick="exportPDF()">📄 Export PDF</button>
         <button class="btn btn-danger btn-sm" onclick="deleteCurrentEvent()">🗑️</button>
       </div>
@@ -310,7 +291,7 @@ textarea.form-control{resize:vertical;min-height:80px}
           <div class="section-title" style="margin-bottom:12px">🔗 Lien de partage technicien</div>
           <div class="share-link-box" id="shareLinkDisplay">
             <span style="flex:1" id="shareLinkText">Générez un lien pour partager avec votre équipe</span>
-            <button class="btn btn-secondary btn-sm" onclick="generateShareLink(event)">Générer</button>
+            <button class="btn btn-secondary btn-sm" onclick="generateShareLink()">Générer</button>
           </div>
         </div>
       </div>
@@ -1138,30 +1119,18 @@ textarea.form-control{resize:vertical;min-height:80px}
 const uid = () => Math.random().toString(36).substr(2,9) + Date.now().toString(36);
 
 const STORE = {
-  // Récupérer un événement par son ID
-  async getEvent(id) {
-    const doc = await db.collection('events').doc(id).get();
-    return doc.exists ? { id: doc.id, ...doc.data() } : null;
+  get(k){ try{return JSON.parse(localStorage.getItem(k))||null}catch{return null} },
+  set(k,v){ localStorage.setItem(k,JSON.stringify(v)) },
+  getEvents(){ return this.get('ef_events')||[] },
+  setEvents(v){ this.set('ef_events',v) },
+  getEvent(id){ return this.getEvents().find(e=>e.id===id)||null },
+  saveEvent(ev){
+    let evs=this.getEvents();
+    const i=evs.findIndex(e=>e.id===ev.id);
+    if(i>=0) evs[i]=ev; else evs.push(ev);
+    this.setEvents(evs);
   },
-
-  // Sauvegarder (créer ou mettre à jour)
-  async saveEvent(ev) {
-    // Si l'event n'a pas d'ID, on en crée un automatiquement avec Firebase
-    const docRef = ev.id ? db.collection('events').doc(ev.id) : db.collection('events').doc();
-    await docRef.set(ev);
-    return docRef.id;
-  },
-
-  // Supprimer
-  async deleteEvent(id) {
-    await db.collection('events').doc(id).delete();
-  },
-
-  // Récupérer TOUS les événements (pour ton dashboard)
-  async fetchAllEvents() {
-    const snapshot = await db.collection('events').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  }
+  deleteEvent(id){ this.setEvents(this.getEvents().filter(e=>e.id!==id)); }
 };
 
 // Current state
@@ -1265,8 +1234,8 @@ function selectColor(el, inputId){
 // =============================================
 // HOME
 // =============================================
-async function renderHome(){
-  const evs = await STORE.fetchAllEvents();
+function renderHome(){
+  const evs = STORE.getEvents();
   const container = document.getElementById('eventsList');
   if(!evs.length){
     container.innerHTML=`<div class="empty-state"><div class="empty-icon">🎪</div><p>Aucun événement créé.<br>Créez votre premier événement pour commencer.</p><button class="btn btn-primary" onclick="openEventModal()">＋ Nouvel événement</button></div>`;
@@ -1298,12 +1267,12 @@ async function renderHome(){
 // =============================================
 // EVENT CRUD
 // =============================================
-async function openEventModal(id=null){
+function openEventModal(id=null){
   const fields=['eName','eLieu','eType','eChef','eNotes','eStart','eEnd','eEditId'];
   fields.forEach(f=>{ const el=document.getElementById(f); if(el) el.value=''; });
   document.getElementById('modalEventTitle').textContent = id ? 'Modifier l\'événement' : 'Nouvel événement';
   if(id){
-    const ev=await STORE.getEvent(id);
+    const ev=STORE.getEvent(id);
     if(!ev) return;
     document.getElementById('eName').value=ev.name||'';
     document.getElementById('eLieu').value=ev.lieu||'';
@@ -1317,7 +1286,7 @@ async function openEventModal(id=null){
   openModal('modalEvent');
 }
 
-async function saveEvent(){
+function saveEvent(){
   const name=document.getElementById('eName').value.trim();
   const lieu=document.getElementById('eLieu').value.trim();
   const dateStart=document.getElementById('eStart').value;
@@ -1325,7 +1294,8 @@ async function saveEvent(){
   if(!name||!dateStart||!dateEnd){ alert('Nom, dates de début et fin sont obligatoires.'); return; }
   if(dateEnd<dateStart){ alert('La date de fin doit être après la date de début.'); return; }
   const editId=document.getElementById('eEditId').value;
-  const ev = editId ? (await STORE.getEvent(editId)||{}) : {};
+  const ev = editId ? (STORE.getEvent(editId)||{}) : {};
+  ev.id = ev.id || uid();
   ev.name=name; ev.lieu=lieu;
   ev.type=document.getElementById('eType').value;
   ev.chef=document.getElementById('eChef').value.trim();
@@ -1340,23 +1310,23 @@ async function saveEvent(){
   ev.contacts=ev.contacts||[];
   ev.transport=ev.transport||[];
   ev.acces=ev.acces||{methode:'',adresse:'',parking:'',codes:'',notes:''};
- await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalEvent');
   if(currentEventId) renderEventHeader();
   else renderHome();
 }
 
-async function deleteCurrentEvent(){
+function deleteCurrentEvent(){
   if(!confirm('Supprimer cet événement et toutes ses données ?')) return;
-  await STORE.deleteEvent(currentEventId);
+  STORE.deleteEvent(currentEventId);
   showHome();
 }
 
 // =============================================
 // EXPORT PDF
 
-async function exportPDF() {
-  const ev = await STORE.getEvent(currentEventId);
+function exportPDF() {
+  const ev = STORE.getEvent(currentEventId);
   if (!ev) return;
 
   const generateDocument = () => {
@@ -1543,8 +1513,8 @@ async function exportPDF() {
 // =============================================
 // EVENT HEADER & TABS
 // =============================================
-async function renderEventHeader(){
-  const ev=await STORE.getEvent(currentEventId);
+function renderEventHeader(){
+  const ev=STORE.getEvent(currentEventId);
   if(!ev) return;
   document.getElementById('evtTitle').textContent=ev.name;
   const days=getEventDays(ev).length;
@@ -1595,8 +1565,8 @@ function renderTab(tab) {
 // =============================================
 // TAB: PERSONNEL - RENDER
 // =============================================
-async function renderPersonnel(){
-  const ev=await STORE.getEvent(currentEventId);
+function renderPersonnel(){
+  const ev=STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const personnel=(ev.personnel||[]);
   
@@ -1676,8 +1646,8 @@ initSortable('personnel', 'personnelGrid');
 // =============================================
 // TAB: INFOS
 // =============================================
-async function renderInfos(){
-  const ev=await STORE.getEvent(currentEventId);
+function renderInfos(){
+  const ev=STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   tc.innerHTML=`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:800px">
@@ -1747,8 +1717,8 @@ const POSTE_LABELS={
 };
 
 
-async function renderPersonnel(){
-  const ev=await STORE.getEvent(currentEventId);
+function renderPersonnel(){
+  const ev=STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const personnel=ev.personnel||[];
   // Group by metier
@@ -1806,80 +1776,50 @@ function personCardHTML(p, color) {
 
 function toggleDayChip(el){ el.classList.toggle('active'); }
 
-async function savePersonnel() {
-  // 1. Récupération sécurisée des champs obligatoires
-  const prenomEl = document.getElementById('pPrenom');
-  const nomEl = document.getElementById('pNom');
-  const telEl = document.getElementById('pTel');
-  
-  const prenom = prenomEl ? prenomEl.value.trim() : '';
-  const nom = nomEl ? nomEl.value.trim() : '';
-  const tel = telEl ? telEl.value.trim() : '';
-  
-  if (!prenom || !nom || !tel) { 
-    alert('Prénom, nom et téléphone sont obligatoires.'); 
-    return; 
-  }
-  
-  const ev = await STORE.getEvent(currentEventId);
-  const editId = document.getElementById('pEditId').value;
-  
-  // 2. CORRECTION : Recherche des jours cochés dans le bon conteneur (#pPlanningDays)
-  const days = [...document.querySelectorAll('#pPlanningDays .day-chip.active')].map(c => c.dataset.day);
-  
-  // Sécurisation de l'email (au cas où vous l'ayez retiré du HTML)
-  const mailEl = document.getElementById('pMail');
-  const mail = mailEl ? mailEl.value.trim() : '';
-
-  const person = {
-    id: editId || uid(),
-    prenom, 
-    nom, 
-    tel,
-    mail,
-    metier: document.getElementById('pMetier').value,
-    poste: document.getElementById('pPoste').value,
-    allergies: document.getElementById('pAllergies').value.trim(),
-    notes: document.getElementById('pNotes').value.trim(),
+function savePerson(){
+  const prenom=document.getElementById('pPrenom').value.trim();
+  const nom=document.getElementById('pNom').value.trim();
+  const tel=document.getElementById('pTel').value.trim();
+  if(!prenom||!nom||!tel){ alert('Prénom, nom et téléphone sont obligatoires.'); return; }
+  const ev=STORE.getEvent(currentEventId);
+  const editId=document.getElementById('pEditId').value;
+  const days=[...document.querySelectorAll('#personDaysContainer .day-chip.active')].map(c=>c.dataset.day);
+  const person={
+    id: editId||uid(),
+    prenom,nom,tel,
+    mail:document.getElementById('pMail').value.trim(),
+    metier:document.getElementById('pMetier').value,
+    poste:document.getElementById('pPoste').value,
+    allergies:document.getElementById('pAllergies').value.trim(),
+    notes:document.getElementById('pNotes').value.trim(),
     days
   };
-  
-  if (editId) {
-    const i = (ev.personnel || []).findIndex(p => p.id === editId);
-    if (i >= 0) ev.personnel[i] = person;
+  if(editId){
+    const i=(ev.personnel||[]).findIndex(p=>p.id===editId);
+    if(i>=0) ev.personnel[i]=person;
   } else {
-    ev.personnel = ev.personnel || [];
+    ev.personnel=ev.personnel||[];
     ev.personnel.push(person);
   }
-  
-  // Sauvegarde dans Firebase
-  await STORE.saveEvent(ev);
-  
-  // 3. CORRECTION : Fermeture de la bonne modale 'modalPersonnel' (évite le crash)
-  closeModal('modalPersonnel');
-  
-  // 4. Rafraîchissement de l'affichage (fonctionne de nouveau !)
+  STORE.saveEvent(ev);
+  closeModal('modalPerson');
   renderPersonnel();
-  
-  // Mise à jour auto des équipes
-  if (typeof autoCreateTeams === 'function') {
-    autoCreateTeams();
-  }
+  autoCreateTeams();
 }
 
-async function deletePerson(id){
+function deletePerson(id){
   if(!confirm('Supprimer ce technicien ?')) return;
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   ev.personnel=(ev.personnel||[]).filter(p=>p.id!==id);
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   renderPersonnel();
 }
 
 // =============================================
 // TAB: ÉQUIPES
 // =============================================
-async function autoCreateTeams(){
-  const ev=await STORE.getEvent(currentEventId);
+function autoCreateTeams(){
+  const ev=STORE.getEvent(currentEventId);
   const personnel=ev.personnel||[];
   const metiers=[...new Set(personnel.map(p=>p.metier))];
   const existing=ev.equipes||[];
@@ -1896,11 +1836,11 @@ async function autoCreateTeams(){
   });
   // remove auto teams for metiers no longer used
   ev.equipes=existing.filter(t=>!t.auto||metiers.includes(t.metier));
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
 }
 
-async function renderEquipes(){
-  const ev=await STORE.getEvent(currentEventId);
+function renderEquipes(){
+  const ev=STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const equipes=ev.equipes||[];
   let html=`<div class="section-header"><div class="section-title">🏃 Équipes</div><button class="btn btn-primary" onclick="openTeamModal()">＋ Créer une équipe</button></div>`;
@@ -1938,8 +1878,8 @@ async function renderEquipes(){
   tc.innerHTML=html;
 }
 
-async function openTeamModal(id=null){
-  const ev=await STORE.getEvent(currentEventId);
+function openTeamModal(id=null){
+  const ev=STORE.getEvent(currentEventId);
   document.getElementById('tName').value='';
   document.getElementById('tMetier').value='';
   document.getElementById('tColor').value='#4F46E5';
@@ -1965,8 +1905,8 @@ async function openTeamModal(id=null){
   openModal('modalTeam');
 }
 
-async function renderTeamMemberLists(selectedIds){
-  const ev=await STORE.getEvent(currentEventId);
+function renderTeamMemberLists(selectedIds){
+  const ev=STORE.getEvent(currentEventId);
   const all=ev.personnel||[];
   const avail=document.getElementById('teamAvailableList');
   const sel=document.getElementById('teamSelectedList');
@@ -1988,10 +1928,10 @@ function toggleTeamMember(personId,adding){
   renderTeamMemberLists(sel);
 }
 
-async function saveTeam(){
+function saveTeam(){
   const name=document.getElementById('tName').value.trim();
   if(!name){ alert('Le nom de l\'équipe est obligatoire.'); return; }
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   const editId=document.getElementById('tEditId').value;
   const team={
     id:editId||uid(),
@@ -2008,16 +1948,16 @@ async function saveTeam(){
     ev.equipes=ev.equipes||[];
     ev.equipes.push(team);
   }
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalTeam');
   renderEquipes();
 }
 
-async function deleteTeam(id){
+function deleteTeam(id){
   if(!confirm('Supprimer cette équipe ?')) return;
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   ev.equipes=(ev.equipes||[]).filter(t=>t.id!==id);
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   renderEquipes();
 }
 
@@ -2031,8 +1971,8 @@ function getUsedMetiers(ev){
 // =============================================
 // AFFICHAGE DU PLANNING (Horaires Dynamiques)
 // =============================================
-async function renderPlanning() {
-  const ev = await STORE.getEvent(currentEventId);
+function renderPlanning() {
+  const ev = STORE.getEvent(currentEventId);
   if (!ev) return;
   const tc = document.getElementById('tabContent');
   const days = getEventDays(ev);
@@ -2209,8 +2149,8 @@ function planningColClick(e, day, metier, startHour = 6) {
 }
 
 
-async function openTaskModal(id=null, preDay=null, preMetier=null, preStart=null, preEnd=null, isDuplicate=false){
-  const ev = await STORE.getEvent(currentEventId);
+function openTaskModal(id=null, preDay=null, preMetier=null, preStart=null, preEnd=null, isDuplicate=false){
+  const ev = STORE.getEvent(currentEventId);
   const days = getEventDays(ev);
   let metiers = getUsedMetiers(ev);
   
@@ -2314,8 +2254,8 @@ async function openTaskModal(id=null, preDay=null, preMetier=null, preStart=null
   openModal('modalTask');
 }
 
-async function renderTaskPersonLists(selectedIds){
-  const ev=await STORE.getEvent(currentEventId);
+function renderTaskPersonLists(selectedIds){
+  const ev=STORE.getEvent(currentEventId);
   const all=ev.personnel||[];
   const makeItem=(p,toSel)=>`<div class="catering-person-item" onclick="toggleTaskPerson('${p.id}',${toSel})">
     <span>${p.prenom} ${p.nom.toUpperCase()}</span>
@@ -2332,7 +2272,7 @@ function toggleTaskPerson(pid,adding){
   renderTaskPersonLists(sel);
 }
 
-async function saveTask(){
+function saveTask(){
   const title=document.getElementById('tkTitle').value.trim();
   const day=document.getElementById('tkDay').value;
   const timeStart=document.getElementById('tkStart').value;
@@ -2346,7 +2286,7 @@ async function saveTask(){
     return; 
   }
 
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   const editId=document.getElementById('tkEditId').value;
   
   const task={
@@ -2366,7 +2306,7 @@ async function saveTask(){
     ev.planning=ev.planning||[];
     ev.planning.push(task);
   }
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalTask');
   renderPlanning();
 }
@@ -2374,8 +2314,8 @@ async function saveTask(){
 // =============================================
 // TAB: CATERING
 // =============================================
-async function renderCatering(){
-  const ev=await STORE.getEvent(currentEventId);
+function renderCatering(){
+  const ev=STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const meals=ev.catering||[];
   const days=getEventDays(ev);
@@ -2446,8 +2386,8 @@ async function renderCatering(){
 }
 
 
-async function openMealModal(id=null){
-  const ev=await STORE.getEvent(currentEventId);
+function openMealModal(id=null){
+  const ev=STORE.getEvent(currentEventId);
   const days=getEventDays(ev);
   
   ['mlType','mlDay','mlTime','mlLieu','mlNotes','mlEditId'].forEach(f=>{
@@ -2483,8 +2423,8 @@ async function openMealModal(id=null){
   openModal('modalMeal');
 }
 
-async function renderMealPersonLists(selectedIds){
-  const ev=await STORE.getEvent(currentEventId);
+function renderMealPersonLists(selectedIds){
+  const ev=STORE.getEvent(currentEventId);
   const all=ev.personnel||[];
   
   const makeItem=(p,toSel)=>`<div class="catering-person-item" onclick="toggleMealPerson('${p.id}',${toSel})">
@@ -2508,12 +2448,12 @@ function toggleMealPerson(pid,adding){
   renderMealPersonLists(sel);
 }
 
-async function saveMeal(){
+function saveMeal(){
   const type=document.getElementById('mlType').value;
   const day=document.getElementById('mlDay').value;
   if(!type||!day){ alert('Type et jour sont obligatoires.'); return; }
   
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   const editId=document.getElementById('mlEditId').value;
   
   const meal={
@@ -2534,24 +2474,24 @@ async function saveMeal(){
     ev.catering.push(meal);
   }
   
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalMeal');
   renderCatering();
 }
 
-async function deleteMeal(id){
+function deleteMeal(id){
   if(!confirm('Supprimer ce repas ?')) return;
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   ev.catering=(ev.catering||[]).filter(m=>m.id!==id);
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   renderCatering();
 }
 
 // =============================================
 // TAB: LOGEMENTS
 // =============================================
-async function renderLogements(){
-  const ev=await STORE.getEvent(currentEventId);
+function renderLogements(){
+  const ev=STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const logements=ev.logements||[];
   let html=`<div class="section-header"><div class="section-title">🏨 Logements</div><button class="btn btn-primary" onclick="openLogementModal()">＋ Ajouter un logement</button></div>`;
@@ -2590,8 +2530,8 @@ async function renderLogements(){
   tc.innerHTML=html;
 }
 
-async function openLogementModal(id=null){
-  const ev=await STORE.getEvent(currentEventId);
+function openLogementModal(id=null){
+  const ev=STORE.getEvent(currentEventId);
   
   ['lgNom','lgAdresse','lgLits','lgParking','lgRecupCles','lgRemiseCles','lgPdj','lgNotes','lgEditId'].forEach(f=>{
     const el=document.getElementById(f);
@@ -2624,8 +2564,8 @@ async function openLogementModal(id=null){
   openModal('modalLogement');
 }
 
-async function renderLogementPersonLists(selectedIds) {
-  const ev = await STORE.getEvent(currentEventId);
+function renderLogementPersonLists(selectedIds) {
+  const ev = STORE.getEvent(currentEventId);
   const allPersonnel = ev.personnel || [];
   const currentEditId = document.getElementById('lgEditId').value;
 
@@ -2672,11 +2612,11 @@ function toggleLogementPerson(pid,adding){
   renderLogementPersonLists(sel);
 }
 
-async function saveLogement(){
+function saveLogement(){
   const nom=document.getElementById('lgNom').value.trim();
   if(!nom){ alert('Le nom du logement est obligatoire.'); return; }
   
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   const editId=document.getElementById('lgEditId').value;
   
   const lg={
@@ -2700,16 +2640,16 @@ async function saveLogement(){
     ev.logements.push(lg);
   }
   
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalLogement');
   renderLogements();
 }
 
-async function deleteLogement(id){
+function deleteLogement(id){
   if(!confirm('Supprimer ce logement ?')) return;
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   ev.logements=(ev.logements||[]).filter(l=>l.id!==id);
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   renderLogements();
 }
 
@@ -2724,8 +2664,8 @@ function toggleLogementPerson(pid,adding){
 // =============================================
 // TAB: ACCÈS
 // =============================================
-async function renderAcces(){
-  const ev=await STORE.getEvent(currentEventId);
+function renderAcces(){
+  const ev=STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const vehicles=(ev.vehicles||[]);
   let html=`<div class="section-header"><div class="section-title">🚗 Accès véhicules</div><button class="btn btn-primary" onclick="openVehicleModal()">＋ Ajouter un véhicule</button></div>`;
@@ -2774,8 +2714,8 @@ async function renderAcces(){
   tc.innerHTML=html;
 }
 
-async function editSiteAcces(){
-  const ev=await STORE.getEvent(currentEventId);
+function editSiteAcces(){
+  const ev=STORE.getEvent(currentEventId);
   document.getElementById('acAdresse').value=ev.acces.adresse||'';
   document.getElementById('acParking').value=ev.acces.parking||'';
   document.getElementById('acCodes').value=ev.acces.codes||'';
@@ -2784,8 +2724,8 @@ async function editSiteAcces(){
   openModal('modalSiteAcces');
 }
 
-async function saveSiteAcces(){
-  const ev=await STORE.getEvent(currentEventId);
+function saveSiteAcces(){
+  const ev=STORE.getEvent(currentEventId);
   ev.acces={
     adresse:document.getElementById('acAdresse').value.trim(),
     parking:document.getElementById('acParking').value.trim(),
@@ -2793,13 +2733,13 @@ async function saveSiteAcces(){
     methode:document.getElementById('acMethode').value.trim(),
     notes:document.getElementById('acNotes').value.trim()
   };
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalSiteAcces');
   renderAcces();
 }
 
-async function openVehicleModal(id = null) {
-  const ev = await STORE.getEvent(currentEventId);
+function openVehicleModal(id = null) {
+  const ev = STORE.getEvent(currentEventId);
   const personnel = ev.personnel || [];
 
   // Reset des champs
@@ -2838,8 +2778,8 @@ function refreshPassengerLists() {
   renderVehiclePersonLists(sel);
 }
 
-async function renderVehiclePersonLists(selectedIds) {
-  const ev = await STORE.getEvent(currentEventId);
+function renderVehiclePersonLists(selectedIds) {
+  const ev = STORE.getEvent(currentEventId);
   const all = ev.personnel || [];
   const currentDriverId = document.getElementById('vhDriver').value;
 
@@ -2871,8 +2811,14 @@ function toggleVehiclePerson(pid, adding) {
   document.getElementById('vhPassengers').value = JSON.stringify(sel);
   renderVehiclePersonLists(sel);
 }
+function toggleVehiclePerson(pid,adding){
+  let sel=JSON.parse(document.getElementById('vhPassengers').value||'[]');
+  if(adding) sel.push(pid); else sel=sel.filter(id=>id!==pid);
+  document.getElementById('vhPassengers').value=JSON.stringify(sel);
+  renderVehiclePersonLists(sel);
+}
 
-async function saveVehicle() {
+function saveVehicle() {
   // Récupération des valeurs
   const plaque = document.getElementById('vhPlaque').value.trim();
   const type = document.getElementById('vhType').value;
@@ -2888,7 +2834,7 @@ async function saveVehicle() {
     return;
   }
 
-  const ev = await STORE.getEvent(currentEventId);
+  const ev = STORE.getEvent(currentEventId);
   const editId = document.getElementById('vhEditId').value;
 
   const v = {
@@ -2909,17 +2855,17 @@ async function saveVehicle() {
     ev.vehicles.push(v);
   }
 
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalVehicle');
   renderAcces(); // Rafraîchit l'onglet Accès
 }
 
 
-async function deleteVehicle(id){
+function deleteVehicle(id){
   if(!confirm('Supprimer ce véhicule ?')) return;
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   ev.vehicles=(ev.vehicles||[]).filter(v=>v.id!==id);
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   renderAcces();
 }
 
@@ -2929,8 +2875,8 @@ async function deleteVehicle(id){
 // =============================================
 // TAB: CONTACTS (Avec Urgences & Équipe auto)
 // =============================================
-async function renderContacts() {
-  const ev = await STORE.getEvent(currentEventId);
+function renderContacts() {
+  const ev = STORE.getEvent(currentEventId);
   const tc = document.getElementById('tabContent');
   const contacts = ev.contacts || [];
   const personnel = ev.personnel || [];
@@ -3047,11 +2993,11 @@ function filterContacts(){
   });
 }
 
-async function openContactModal(id=null){
+function openContactModal(id=null){
   ['ctPrenom','ctNom','ctTel','ctMail','ctRole','ctOrga','ctNotes','ctEditId'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('modalContactTitle').textContent=id?'Modifier le contact':'Ajouter un contact';
   if(id){
-    const ev=await STORE.getEvent(currentEventId);
+    const ev=STORE.getEvent(currentEventId);
     const c=(ev.contacts||[]).find(x=>x.id===id);
     if(c){
       document.getElementById('ctPrenom').value=c.prenom||'';
@@ -3067,11 +3013,11 @@ async function openContactModal(id=null){
   openModal('modalContact');
 }
 
-async function saveContact(){
+function saveContact(){
   const nom=document.getElementById('ctNom').value.trim();
   const tel=document.getElementById('ctTel').value.trim();
   if(!nom||!tel){ alert('Nom et téléphone sont obligatoires.'); return; }
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   const editId=document.getElementById('ctEditId').value;
   const c={
     id:editId||uid(),
@@ -3089,24 +3035,24 @@ async function saveContact(){
     ev.contacts=ev.contacts||[];
     ev.contacts.push(c);
   }
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalContact');
   renderContacts();
 }
 
-async function deleteContact(id){
+function deleteContact(id){
   if(!confirm('Supprimer ce contact ?')) return;
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   ev.contacts=(ev.contacts||[]).filter(c=>c.id!==id);
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   renderContacts();
 }
 
 // =============================================
 // TAB: TRANSPORT
 // =============================================
-async function renderTransport(){
-  const ev=await STORE.getEvent(currentEventId);
+function renderTransport(){
+  const ev=STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const transports=ev.transport||[];
   let html=`<div class="section-header"><div class="section-title">🚛 Transport du matériel</div><button class="btn btn-primary" onclick="openTransportModal()">＋ Ajouter un camion</button></div>`;
@@ -3151,11 +3097,11 @@ async function renderTransport(){
   tc.innerHTML=html;
 }
 
-async function openTransportModal(id=null){
+function openTransportModal(id=null){
   ['trSociete','trPlaque','trType','trContenu','trChauffeur','trChauffeurTel','trLivraison','trRecup','trAcces','trNotes','trEditId'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('modalTransTitle').textContent=id?'Modifier le camion':'Ajouter un camion';
   if(id){
-    const ev=await STORE.getEvent(currentEventId);
+    const ev=STORE.getEvent(currentEventId);
     const t=(ev.transport||[]).find(x=>x.id===id);
     if(t){
       document.getElementById('trSociete').value=t.societe||'';
@@ -3174,11 +3120,11 @@ async function openTransportModal(id=null){
   openModal('modalTransport');
 }
 
-async function saveTransport(){
+function saveTransport(){
   const societe=document.getElementById('trSociete').value.trim();
   const plaque=document.getElementById('trPlaque').value.trim().toUpperCase();
   if(!societe||!plaque){ alert('Société et plaque obligatoires.'); return; }
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   const editId=document.getElementById('trEditId').value;
   const t={
     id:editId||uid(),societe,plaque,
@@ -3198,16 +3144,16 @@ async function saveTransport(){
     ev.transport=ev.transport||[];
     ev.transport.push(t);
   }
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalTransport');
   renderTransport();
 }
 
-async function deleteTransport(id){
+function deleteTransport(id){
   if(!confirm('Supprimer ce camion ?')) return;
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   ev.transport=(ev.transport||[]).filter(t=>t.id!==id);
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   renderTransport();
 }
 
@@ -3222,8 +3168,8 @@ function showPublicTeam(eventId){
   renderPublicTeam();
 }
 
-async function renderPublicTeam(){
-  const ev=await STORE.getEvent(currentPublicEventId);
+function renderPublicTeam(){
+  const ev=STORE.getEvent(currentPublicEventId);
   if(!ev) return;
   const personnel=(ev.personnel||[]).sort((a,b)=>(a.nom+a.prenom).localeCompare(b.nom+b.prenom));
   const heroHtml=`
@@ -3263,9 +3209,9 @@ async function renderPublicTeam(){
 // =============================================
 // PUBLIC VIEW: PERSONAL DASHBOARD
 // =============================================
-async function showPublicDashboard(personId){
+function showPublicDashboard(personId){
   currentPublicPersonId=personId;
-  const ev=await STORE.getEvent(currentPublicEventId);
+  const ev=STORE.getEvent(currentPublicEventId);
   const person=(ev.personnel||[]).find(p=>p.id===personId);
   if(!person) return;
   showView('viewDashboard');
@@ -3418,8 +3364,8 @@ function copyShareLink(){
 // =============================================
 // PERSONNEL CRUD
 // =============================================
-async function openPersonnelModal(id=null){  // ← "nel" important !
-  const ev=await STORE.getEvent(currentEventId);
+function openPersonnelModal(id=null){  // ← "nel" important !
+  const ev=STORE.getEvent(currentEventId);
   const days=getEventDays(ev);
   
   ['pPrenom','pNom','pTel','pMail','pMetier','pPoste','pAllergies','pNotes','pEditId'].forEach(f=>{
@@ -3474,7 +3420,7 @@ function togglePersonnelDay(el){
   el.classList.toggle('active');
 }
 
-async function savePersonnel(){
+function savePersonnel(){
   const prenom=document.getElementById('pPrenom').value.trim();
   const nom=document.getElementById('pNom').value.trim();
   const tel=document.getElementById('pTel').value.trim();
@@ -3484,7 +3430,7 @@ async function savePersonnel(){
     return;
   }
   
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   const editId=document.getElementById('pEditId').value;
   const days=[...document.querySelectorAll('#pPlanningDays input[type="checkbox"]:checked')].map(c=>c.dataset.day);
   
@@ -3509,22 +3455,22 @@ async function savePersonnel(){
     ev.personnel.push(person);
   }
   
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   closeModal('modalPersonnel');
   renderPersonnel();
 }
 
-async function deletePersonnel(id){
+function deletePersonnel(id){
   if(!confirm('Supprimer ce technicien ?')) return;
-  const ev=await STORE.getEvent(currentEventId);
+  const ev=STORE.getEvent(currentEventId);
   ev.personnel=(ev.personnel||[]).filter(p=>p.id!==id);
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   renderPersonnel();
 }
 
 // Auto-création des équipes par métier
-async function autoCreateTeams(){
-  const ev=await STORE.getEvent(currentEventId);
+function autoCreateTeams(){
+  const ev=STORE.getEvent(currentEventId);
   const personnel=ev.personnel||[];
   const metiers=[...new Set(personnel.map(p=>p.metier))];
   const existing=ev.equipes||[];
@@ -3548,12 +3494,12 @@ async function autoCreateTeams(){
   });
   
   ev.equipes=existing.filter(t=>!t.auto||metiers.includes(t.metier));
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
 }
 
 // Fonction universelle de duplication
-async function duplicateItem(category, id) {
-  const ev = await STORE.getEvent(currentEventId);
+function duplicateItem(category, id) {
+  const ev = STORE.getEvent(currentEventId);
   if (!ev) return;
   
   // Note : pour le personnel, la clé dans l'objet ev est 'personnel', 
@@ -3581,28 +3527,31 @@ async function duplicateItem(category, id) {
   }
 
   ev[category].push(copy);
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
 
   // Rafraîchissement automatique de l'onglet
   renderTab(currentTab);
 }
 
-async function initSortable(category, containerId) {
+function initSortable(category, containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
 
   Sortable.create(el, {
     animation: 150,
-    handle: '.drag-handle',
-    onEnd: async function (evt) { // <--- AJOUT DU MOT-CLÉ async ICI
-      const ev = await STORE.getEvent(currentEventId);
+    handle: '.drag-handle', // On glisse via une petite icône
+    onEnd: function (evt) {
+      const ev = STORE.getEvent(currentEventId);
       if (!ev || !ev[category]) return;
 
+      // On réorganise le tableau dans le STORE selon le nouvel ordre visuel
       const items = ev[category];
       const [movedItem] = items.splice(evt.oldIndex, 1);
       items.splice(evt.newIndex, 0, movedItem);
 
-      await STORE.saveEvent(ev);
+      STORE.saveEvent(ev);
+      // Optionnel : renderTab(currentTab); 
+      // On ne rafraîchit pas forcément pour éviter les clignotements
     },
   });
 }
@@ -3610,16 +3559,16 @@ async function initSortable(category, containerId) {
 // =============================================
 // SUPPRIMER UNE TÂCHE DU PLANNING
 // =============================================
-async function deleteTask(id) {
+function deleteTask(id) {
   if (!confirm('Es-tu sûr de vouloir supprimer cette tâche ?')) return;
   
-  const ev = await STORE.getEvent(currentEventId);
+  const ev = STORE.getEvent(currentEventId);
   if (!ev) return;
   
   // On filtre pour garder toutes les tâches SAUF celle qu'on veut supprimer
   ev.planning = (ev.planning || []).filter(t => t.id !== id);
   
-  await STORE.saveEvent(ev);
+  STORE.saveEvent(ev);
   renderPlanning();
 }
 
@@ -3630,19 +3579,15 @@ async function deleteTask(id) {
 const JSONBIN_API_KEY = "$2a$10$B.kGrFFzC75O9OvY6UxDR.TTBqO34YBni3C.uUJNo86hFVCOkmVhe";
 
 // 1. GÉNÉRER OU METTRE À JOUR LE LIEN (Côté Admin)
-async function generateShareLink(e) { 
-  const ev = await STORE.getEvent(currentEventId);
+async function generateShareLink() {
+  const ev = STORE.getEvent(currentEventId);
   if (!ev) return;
 
-  // Modifiez cette ligne pour utiliser 'e' au lieu de 'event'
-  const btn = (e && e.currentTarget) ? e.currentTarget : null;
-  
-  let originalText = "";
-  if (btn) {
-    originalText = btn.innerHTML;
-    btn.innerHTML = "⏳ Synchronisation Cloud...";
-    btn.disabled = true;
-  }
+  // Animation du bouton
+  const btn = event.currentTarget;
+  const originalText = btn.innerHTML;
+  btn.innerHTML = "⏳ Synchronisation Cloud...";
+  btn.disabled = true;
 
   try {
     const binId = ev.cloudId;
@@ -3659,7 +3604,7 @@ async function generateShareLink(e) {
       headers: {
         'Content-Type': 'application/json',
         'X-Master-Key': '$2a$10$B.kGrFFzC75O9OvY6UxDR.TTBqO34YBni3C.uUJNo86hFVCOkmVhe',
-        'X-Bin-Private': 'false'
+        'X-Bin-Private': 'false' // Très important : rend le lien accessible sans clé pour les techs
       },
       body: JSON.stringify(ev)
     });
@@ -3669,8 +3614,9 @@ async function generateShareLink(e) {
     if (response.ok) {
       const newBinId = binId || result.metadata.id;
       ev.cloudId = newBinId;
-      await STORE.saveEvent(ev);
+      STORE.saveEvent(ev);
 
+      // Création du lien Internet
       const baseUrl = window.location.origin + window.location.pathname;
       const shareUrl = `${baseUrl}#live=${newBinId}`;
 
@@ -3679,16 +3625,15 @@ async function generateShareLink(e) {
     } else {
       throw new Error("Erreur serveur JSONBin");
     }
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
     alert("❌ Erreur de connexion au Cloud. Vérifie ta connexion internet.");
   } finally {
-    if (btn) {
-      btn.innerHTML = originalText;
-      btn.disabled = false;
-    }
+    btn.innerHTML = originalText;
+    btn.disabled = false;
   }
 }
+
 // 3. AFFICHAGE DU PORTAIL (Liste des noms)
 function renderTechPortal(ev) {
   document.body.style.background = "#0F0E17";
@@ -3780,46 +3725,6 @@ function renderTechPortal() {
 // PUBLIC VIEW: PERSONAL DASHBOARD (VERSION PRO)
 // =============================================
 
-// =============================================
-// PUBLIC VIEW: PERSONAL DASHBOARD (VERSION PRO)
-// =============================================
-
-// =============================================
-// PUBLIC VIEW: PERSONAL DASHBOARD (VERSION CORRIGÉE)
-// =============================================
-
-// =============================================
-// PUBLIC VIEW: PERSONAL DASHBOARD + MODAL FIX
-// =============================================
-
-// ----------------------------------------------------
-// GÉNÉRATION DES BLOCS PLANNING (PAR JOUR)
-// ----------------------------------------------------
-function generatePublicPlanningHtml(myTasks, ev) {
-  const days = getEventDays(ev);
-  if (!myTasks.length) return '<div style="color:#6B6890; font-size:0.8rem;">Aucune tâche assignée.</div>';
-
-  return days.map(day => {
-    const dayTasks = myTasks.filter(t => t.day === day).sort((a,b) => a.timeStart.localeCompare(b.timeStart));
-    if (!dayTasks.length) return '';
-
-    return `
-      <div style="min-width:220px; background:#1A1928; border:1px solid #2D2B45; border-radius:12px; overflow:hidden; flex-shrink:0;">
-        <div style="background:#252438; padding:8px; text-align:center; font-size:0.75rem; font-weight:bold; border-bottom:1px solid #2D2B45; color:#4F46E5;">
-          ${formatDateShort(day)}
-        </div>
-        <div style="padding:10px; display:flex; flex-direction:column; gap:8px;">
-          ${dayTasks.map(t => `
-            <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:3px solid ${t.color}; border-radius:6px; padding:10px; cursor:pointer;">
-              <div style="font-size:0.7rem; font-weight:bold; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
-              <div style="font-size:0.85rem; font-weight:700; margin-top:2px;">${t.title}</div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  }).join('');
-}
 
 // =============================================
 // PUBLIC VIEW: PERSONAL DASHBOARD (VERSION COMPLÈTE)
@@ -4075,45 +3980,72 @@ function generatePublicCateringHtml(myMeals, ev) {
 }
 
 
-// 4. PLANNING VISUEL MOBILE
+// ----------------------------------------------------
+// GÉNÉRATION DES BLOCS PLANNING (PAR JOUR) - VERSION CORRIGÉE
+// ----------------------------------------------------
+// ----------------------------------------------------
+// GÉNÉRATION DES BLOCS PLANNING (PAR JOUR) - FIX OVERNIGHT
+// ----------------------------------------------------
 function generatePublicPlanningHtml(myTasks, ev) {
   const days = getEventDays(ev);
-  if (!myTasks.length) return `<div style="color:#6B6890; padding:20px;">Aucune tâche assignée.</div>`;
+  if (!myTasks || !myTasks.length) return '<div style="color:#6B6890; font-size:0.8rem; padding:10px;">Aucune tâche assignée.</div>';
+
+  // Fonction utilitaire pour transformer l'heure en minutes de production (06h -> 30h)
+  const toProdMin = (tStr) => {
+    if(!tStr) return 0;
+    const [h, m] = tStr.split(':').map(Number);
+    // Si l'heure est entre 00:00 et 05:59, on ajoute 24h
+    const adjustedH = (h < 6) ? h + 24 : h;
+    return adjustedH * 60 + m;
+  };
 
   return days.map(day => {
     const dayTasks = myTasks.filter(t => t.day === day);
     if (!dayTasks.length) return '';
 
+    // 1. Tri des tâches avec la logique "Production" (01:00 passe après 23:00)
+    const sortedTasks = [...dayTasks].sort((a, b) => toProdMin(a.timeStart) - toProdMin(b.timeStart));
+    
+    // 2. Trouver la tâche qui finit le plus tard (avec la même logique)
+    const lastTask = [...dayTasks].sort((a, b) => toProdMin(b.timeEnd) - toProdMin(a.timeEnd))[0];
+
+    const startTime = sortedTasks[0].timeStart;
+    const endTime = lastTask.timeEnd;
+    const totalDayRange = `${startTime} - ${endTime}`;
+
     return `
-      <div style="min-width: 260px; flex-shrink: 0; background: #1A1928; border-radius: 12px; border: 1px solid #2D2B45; overflow: hidden;">
-        <div style="background: #252438; padding: 12px; text-align: center; border-bottom: 1px solid #2D2B45;">
-          <div style="font-weight: bold; font-size: 1rem;">${formatDateShort(day)}</div>
+      <div style="min-width:220px; background:#1A1928; border:1px solid #2D2B45; border-radius:12px; overflow:hidden; flex-shrink:0;">
+        <div style="background:#252438; padding:10px; text-align:center; border-bottom:1px solid #4F46E5; display:flex; flex-direction:column; gap:2px;">
+          <div style="font-size:0.7rem; font-weight:700; color:#A9A6C3; text-transform:uppercase;">${formatDateShort(day)}</div>
+          <div style="font-size:1rem; font-weight:900; color:white; letter-spacing:0.5px;">⏱️ ${totalDayRange}</div>
         </div>
-        <div style="padding: 10px; display:flex; flex-direction:column; gap:8px;">
-          ${dayTasks.sort((a,b) => a.timeStart.localeCompare(b.timeStart)).map(t => `
-            <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:4px solid ${t.color}; padding:10px; border-radius:4px; cursor:pointer;">
-              <div style="font-size:0.75rem; font-weight:800; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
-              <div style="font-weight:700; font-size:0.9rem; margin-top:2px;">${t.title}</div>
+        <div style="padding:10px; display:flex; flex-direction:column; gap:8px;">
+          ${sortedTasks.map(t => `
+            <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:3px solid ${t.color}; border-radius:6px; padding:10px; cursor:pointer;">
+              <div style="font-size:0.7rem; font-weight:bold; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
+              <div style="font-size:0.85rem; font-weight:700; margin-top:2px;">${t.title}</div>
             </div>
           `).join('')}
         </div>
-      </div>`;
+      </div>
+    `;
   }).join('');
 }
+
+
 
 
 // =============================================
 // INIT
 // =============================================
-window.addEventListener('load', () => {
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('public')) {
+window.addEventListener('load',()=>{
+  const params=new URLSearchParams(window.location.search);
+  if(params.has('public')){
     showPublicTeam(params.get('public'));
   } else {
     showHome();
   }
 });
-
 </script>
 </body>
 </html>
