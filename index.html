@@ -3706,6 +3706,11 @@ function renderTechPortal() {
         <div style="font-size: 2.5rem; margin-bottom: 15px;">⚡</div>
         <h1 style="font-size: 1.8rem; margin-bottom: 8px;">${ev.name}</h1>
         <p style="color: #A9A6C3;">Portail Équipe - Choisis ton nom :</p>
+ <!-- BOUTON PRODUCTION -->
+        <button onclick="renderProductionDashboard()" style="margin-top:20px; width:100%; padding:15px; background:var(--gradient, #4F46E5); border:none; border-radius:12px; color:white; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; box-shadow: 0 4px 15px rgba(79,70,229,0.3);">
+          📊 ESPACE PRODUCTION (LOGISTIQUE)
+        </button>
+     
       </header>
       <div style="display: grid; gap: 12px;">
         ${(ev.personnel || []).sort((a,b) => a.prenom.localeCompare(b.prenom)).map(p => `
@@ -4033,7 +4038,229 @@ function generatePublicPlanningHtml(myTasks, ev) {
 }
 
 
+function renderProductionDashboard() {
+  const ev = window.PUBLIC_EV;
+  const days = getEventDays(ev);
+  
+  // Utilitaire pour le tri chronologique pro (gestion de la nuit)
+  const toProdMin = (tStr) => {
+    if(!tStr) return 0;
+    const [h, m] = tStr.split(':').map(Number);
+    const adjustedH = (h < 6) ? h + 24 : h;
+    return adjustedH * 60 + m;
+  };
 
+  document.body.innerHTML = `
+    <style>
+      :root { --bg: #0B0A10; --card: #161521; --border: #2D2B45; --accent: #4F46E5; --text: #F8F8FF; --text-soft: #A9A6C3; --danger: #EF4444; }
+      body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+      .prod-container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+      .section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 25px; overflow: hidden; }
+      .section-h { background: rgba(255,255,255,0.03); padding: 15px 20px; border-bottom: 1px solid var(--border); font-weight: 800; font-size: 0.85rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: left; padding: 12px 15px; font-size: 0.7rem; color: var(--text-soft); border-bottom: 2px solid var(--border); text-transform: uppercase; }
+      td { padding: 12px 15px; border-bottom: 1px solid var(--border); font-size: 0.85rem; vertical-align: top; border-right: 1px solid rgba(255,255,255,0.03); }
+      .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; background: var(--border); color: var(--text); }
+      .sticky-header { position: sticky; top: 0; background: var(--bg); z-index: 100; padding: 15px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+      .allergy-alert { color: var(--danger); font-weight: 800; font-size: 0.75rem; display: block; margin-top: 2px; }
+    </style>
+
+    <div class="prod-container">
+      <div class="sticky-header">
+        <div>
+          <h1 style="margin:0; font-size:1.4rem;">📊 MASTER LOGISTIQUE : ${ev.name}</h1>
+          <div style="color:var(--text-soft); font-size:0.9rem;">${ev.lieu || 'Lieu NC'} | Vue Production Desktop</div>
+        </div>
+        <button onclick="location.reload()" style="background:var(--accent); color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">← RETOUR PORTAIL</button>
+      </div>
+
+      <!-- 1. PLANNING GÉNÉRAL (Synchronisé sur ev.planning) -->
+      <div class="section">
+        <div class="section-h">📅 PLANNING GÉNÉRAL DES OPÉRATIONS</div>
+        ${days.map(day => {
+          const dayTasks = (ev.planning || []).filter(t => t.day === day).sort((a,b) => toProdMin(a.timeStart) - toProdMin(b.timeStart));
+          if(dayTasks.length === 0) return '';
+          return `
+            <div style="background: #1F1D2E; padding: 10px 20px; font-weight: 800; color: #FFF; font-size: 0.85rem; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between;">
+              <span>${formatDate(day).toUpperCase()}</span>
+              <span style="color:var(--accent)">${dayTasks.length} Tâches</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:140px;">Horaires</th>
+                  <th style="width:300px;">Activité</th>
+                  <th style="width:300px;">Personnel</th>
+                  <th>Notes & Instructions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${dayTasks.map(t => {
+                  const assigned = (ev.personnel || []).filter(p => (t.persons || []).includes(p.id));
+                  return `
+                    <tr>
+                      <td style="font-weight:700; color:var(--accent);">${t.timeStart} — ${t.timeEnd}</td>
+                      <td style="font-weight:700;"><span style="border-left: 4px solid ${t.color || '#4F46E5'}; padding-left: 10px;">${t.title}</span></td>
+                      <td>${assigned.map(a => `<span class="badge" style="margin:2px;">${a.prenom}</span>`).join('')}</td>
+                      <td style="font-size:0.8rem; color:var(--text-soft); line-height:1.4;">${t.notes || '-'}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          `;
+        }).join('')}
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        
+        <!-- 2. LOGEMENTS (Synchronisé sur lgArrival / lgDepart) -->
+        <div class="section">
+          <div class="section-h">🏨 LOGEMENTS & OCCUPANTS</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Hôtel / Lieu</th>
+                <th>Dates</th>
+                <th>Occupants</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(ev.logements || []).length > 0 ? ev.logements.map(l => {
+                const occupants = (l.persons || []).map(pObj => {
+                    const p = ev.personnel.find(x => x.id === (pObj.id || pObj));
+                    return p ? p.prenom : 'NC';
+                }).join(', ');
+                return `
+                  <tr>
+                    <td><div style="font-weight:700;">${l.nom}</div><div style="font-size:0.7rem; color:var(--text-soft);">${l.adresse || ''}</div></td>
+                    <td style="white-space:nowrap;">
+                        <span class="badge">In: ${formatDateShort(l.lgArrival)}</span><br>
+                        <span class="badge" style="margin-top:4px;">Out: ${formatDateShort(l.lgDepart)}</span>
+                    </td>
+                    <td style="font-size:0.8rem;">${occupants || '—'}</td>
+                  </tr>
+                `;
+              }).join('') : '<tr><td colspan="3" style="text-align:center; padding:30px; color:var(--text-soft);">Aucun logement enregistré</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 3. VÉHICULES (Synchronisé sur ev.vehicles) -->
+        <div class="section">
+          <div class="section-h">🚗 FLOTTE VÉHICULES (ACCÈS)</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Véhicule</th>
+                <th>Plaque</th>
+                <th>Chauffeur & Passagers</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(ev.vehicles || []).length > 0 ? ev.vehicles.map(v => {
+                const driver = ev.personnel.find(p => p.id === v.driver);
+                const passengers = (v.passengers || []).map(pid => ev.personnel.find(x => x.id === pid)?.prenom).filter(Boolean).join(', ');
+                return `
+                  <tr>
+                    <td><div style="font-weight:700;">${v.modele}</div><div style="font-size:0.7rem; color:var(--text-soft);">${v.type || ''}</div></td>
+                    <td><code style="background:#000; padding:4px 8px; border-radius:4px; font-weight:bold; color:var(--accent); border:1px solid var(--border);">${v.plaque || 'NC'}</code></td>
+                    <td style="font-size:0.8rem;">
+                        <strong>Cond: ${driver ? driver.prenom : 'NC'}</strong><br>
+                        <span style="color:var(--text-soft);">Pass: ${passengers || 'Seul'}</span>
+                    </td>
+                  </tr>
+                `;
+              }).join('') : '<tr><td colspan="3" style="text-align:center; padding:30px; color:var(--text-soft);">Aucun véhicule enregistré</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- 4. TRANSPORT MATÉRIEL (Synchronisé sur ev.transport) -->
+      <div class="section" style="margin-top:25px;">
+        <div class="section-h">🚛 TRANSPORT MATÉRIEL (CAMIONS)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Société / Plaque</th>
+              <th>Contenu</th>
+              <th>Chauffeur</th>
+              <th>Livraison</th>
+              <th>Récupération</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(ev.transport || []).length > 0 ? ev.transport.map(t => `
+              <tr>
+                <td><div style="font-weight:700;">${t.societe}</div><div style="font-size:0.7rem; color:var(--text-soft);">${t.plaque || ''}</div></td>
+                <td>${t.contenu || '-'}</td>
+                <td><div>${t.chauffeur || 'NC'}</div><div style="font-size:0.75rem; font-family:monospace;">${t.chauffeur_tel || ''}</div></td>
+                <td><span class="badge" style="background:var(--success)22; color:var(--success);">${formatDateTime(t.livraison)}</span></td>
+                <td><span class="badge" style="background:var(--danger)22; color:var(--danger);">${formatDateTime(t.recup)}</span></td>
+              </tr>
+            `).join('') : '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-soft);">Aucun transport matériel enregistré</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 5. CATERING & ALLERGIES -->
+      <div class="section">
+        <div class="section-h">🍽️ RÉCAPITULATIF CATERING & ALLERGIES</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Jour</th>
+              <th>Repas</th>
+              <th>Heure</th>
+              <th>Nb</th>
+              <th>Détails & Allergies</th>
+            </tr>
+          </thead>
+          <tbody>
+             ${days.map(day => {
+              const dayMeals = (ev.catering || []).filter(m => m.day === day);
+              if (dayMeals.length === 0) return '';
+              return dayMeals.map(m => {
+                const people = (m.persons || []).map(pid => {
+                  const p = (ev.personnel || []).find(x => x.id === pid);
+                  if(!p) return '';
+                  // Alerte visuelle si allergie
+                  return p.allergies 
+                    ? `<span class="allergy-alert">${p.prenom} (⚠️ ${p.allergies})</span>` 
+                    : `<span>${p.prenom}</span>`;
+                }).filter(n => n).join(', ');
+                
+                return `
+                  <tr>
+                    <td style="font-weight:bold;">${formatDateShort(day)}</td>
+                    <td><span class="badge" style="background:var(--accent);">${m.type.toUpperCase()}</span></td>
+                    <td style="font-weight:700;">${m.time || '--:--'}</td>
+                    <td><b style="color:var(--accent); font-size:1rem;">${m.persons?.length || 0}</b></td>
+                    <td style="font-size:0.8rem; line-height:1.4;">${people || '<span style="color:var(--text-soft)">Aucun convive assigné</span>'}</td>
+                  </tr>
+                `;
+              }).join('');
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 6. NOTES GÉNÉRALES DE PROD -->
+      <div class="section">
+        <div class="section-h">📝 NOTES GÉNÉRALES DE PRODUCTION</div>
+        <div style="padding:25px; white-space: pre-wrap; font-size:0.95rem; line-height:1.6; color:var(--text-soft); background: rgba(255,255,255,0.01);">
+          ${ev.notes || 'Aucune note générale enregistrée pour cet événement.'}
+        </div>
+      </div>
+
+      <div style="text-align:center; padding:40px; color:var(--text-soft); font-size:0.8rem; opacity:0.5;">
+        EVENTFLOW PRO DASHBOARD — Document généré en temps réel le ${new Date().toLocaleDateString()}
+      </div>
+    </div>
+  `;
+}
 
 // =============================================
 // INIT
