@@ -1,11 +1,36 @@
 
 
+
+
+
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EVENTFLOW</title>
+
+<!-- 1. CHARGEMENT DE FIREBASE (Les scripts dont j'ai parlé) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+    
+    <script>
+      const firebaseConfig = {
+        apiKey: "AIzaSyC5rzLguVUCYHSAzkkGSUOBEMFhZZNGRto",
+        authDomain: "eventflow-58db8.firebaseapp.com",
+        projectId: "eventflow-58db8",
+        storageBucket: "eventflow-58db8.firebasestorage.app",
+        messagingSenderId: "834954392218",
+        appId: "1:834954392218:web:7e76640c196371418f6523"
+      };
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore();
+    </script>
+
 <style>
 :root {
   --primary:#4F46E5;--primary-dark:#3730A3;--secondary:#7C3AED;--accent:#A78BFA;
@@ -259,7 +284,7 @@ textarea.form-control{resize:vertical;min-height:80px}
         <h2 id="evtTitle">Événement</h2>
       </div>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary btn-sm" onclick="generateShareLink()">🔗 Lien technicien</button>
+       <button class="btn btn-secondary btn-sm" onclick="generateShareLink(event)">🔗 Lien technicien</button>
         <button class="btn btn-primary btn-sm" onclick="exportPDF()">📄 Export PDF</button>
         <button class="btn btn-danger btn-sm" onclick="deleteCurrentEvent()">🗑️</button>
       </div>
@@ -292,7 +317,7 @@ textarea.form-control{resize:vertical;min-height:80px}
           <div class="section-title" style="margin-bottom:12px">🔗 Lien de partage technicien</div>
           <div class="share-link-box" id="shareLinkDisplay">
             <span style="flex:1" id="shareLinkText">Générez un lien pour partager avec votre équipe</span>
-            <button class="btn btn-secondary btn-sm" onclick="generateShareLink()">Générer</button>
+            <button class="btn btn-secondary btn-sm" onclick="generateShareLink(event)">Générer</button>
           </div>
         </div>
       </div>
@@ -606,15 +631,21 @@ textarea.form-control{resize:vertical;min-height:80px}
 <!-- Modal: Tâche Planning -->
 <div class="modal-overlay" id="modalTask">
   <div class="modal modal-lg">
-    <div class="modal-header">
-      <h3 id="modalTaskTitle">Ajouter une tâche</h3>
-      <button class="btn btn-ghost btn-icon" onclick="closeModal('modalTask')">✕</button>
-    </div>
+ <div class="modal-header">
+  <h3 id="modalTaskTitle">Ajouter une tâche</h3>
+  <!-- Ce conteneur doit être DANS le header -->
+  <div style="display:flex; gap:10px;">
+    <button id="btnDeleteTask" class="btn btn-error" style="display:none; background:var(--error); color:white;" onclick="confirmDeleteTask()">🗑️ Supprimer</button>
+    <button class="btn btn-ghost btn-icon" onclick="closeModal('modalTask')">✕</button>
+  </div>
+</div> <!-- Fermeture header corrigée -->
+    
     <div class="modal-body">
       <div class="form-group">
         <label class="form-label">Titre de la tâche *</label>
         <input class="form-control" id="tkTitle" placeholder="Ex: Montage structure lumière">
       </div>
+      
       <div class="form-row-3">
         <div class="form-group">
           <label class="form-label">Jour *</label>
@@ -629,11 +660,12 @@ textarea.form-control{resize:vertical;min-height:80px}
           <input class="form-control" type="time" id="tkEnd" value="12:00">
         </div>
       </div>
-      <div class="form-row">
+
+      <div class="form-row"> <!-- Ouverture row corrigée -->
         <div class="form-group">
           <label class="form-label">Colonne / Catégorie *</label>
           <div id="tkMetiersContainer" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
-</div>
+        </div>
         <div class="form-group">
           <label class="form-label">Couleur</label>
           <div class="color-options" style="margin-top:4px">
@@ -649,13 +681,13 @@ textarea.form-control{resize:vertical;min-height:80px}
           </div>
           <input type="hidden" id="tkColor" value="#4F46E5">
         </div>
-      </div>
+      </div> <!-- Fermeture row ajoutée -->
+
       <div class="form-group">
-        <label class="form-label">Équipe assignée</label>
-        <select class="form-control" id="tkTeam">
-          <option value="">— Aucune équipe —</option>
-        </select>
+        <label class="form-label">Équipes assignées</label>
+        <div id="tkTeamsContainer" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
       </div>
+
       <div class="form-group">
         <label class="form-label">Personnel assigné</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -670,18 +702,21 @@ textarea.form-control{resize:vertical;min-height:80px}
         </div>
         <input type="hidden" id="tkPersons" value="[]">
       </div>
+      
       <div class="form-group">
         <label class="form-label">Notes</label>
         <textarea class="form-control" id="tkNotes" placeholder="Détails, lieu précis, matériel nécessaire..."></textarea>
       </div>
       <input type="hidden" id="tkEditId">
     </div>
+    
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalTask')">Annuler</button>
       <button class="btn btn-primary" onclick="saveTask()">💾 Enregistrer</button>
     </div>
   </div>
 </div>
+
 
 <!-- Modal: Repas Catering -->
 <div class="modal-overlay" id="modalMeal">
@@ -1111,7 +1146,8 @@ textarea.form-control{resize:vertical;min-height:80px}
 
 
 
-<script>src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
 
 <script>
 // =============================================
@@ -1119,20 +1155,59 @@ textarea.form-control{resize:vertical;min-height:80px}
 // =============================================
 const uid = () => Math.random().toString(36).substr(2,9) + Date.now().toString(36);
 
+
+
+// =============================================
+// UTILITIES & FIREBASE STORAGE (TEMPS RÉEL)
+// =============================================
 const STORE = {
-  get(k){ try{return JSON.parse(localStorage.getItem(k))||null}catch{return null} },
-  set(k,v){ localStorage.setItem(k,JSON.stringify(v)) },
-  getEvents(){ return this.get('ef_events')||[] },
-  setEvents(v){ this.set('ef_events',v) },
-  getEvent(id){ return this.getEvents().find(e=>e.id===id)||null },
-  saveEvent(ev){
-    let evs=this.getEvents();
-    const i=evs.findIndex(e=>e.id===ev.id);
-    if(i>=0) evs[i]=ev; else evs.push(ev);
-    this.setEvents(evs);
+  eventsCache: [],
+  isListening: false,
+  
+  getEvents() { return this.eventsCache; },
+  getEvent(id) { return this.eventsCache.find(e => e.id === id) || null; },
+  
+  // NOUVEAU : onSnapshot écoute la base de données en direct !
+  loadAllEvents(callback) {
+    if (this.isListening) return;
+    this.isListening = true;
+    
+    db.collection('events').onSnapshot(snapshot => {
+      this.eventsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Si une modification est détectée par Firebase, on met à jour l'écran automatiquement
+      if (typeof callback === 'function') callback();
+    }, error => {
+      console.error("❌ Erreur Firebase onSnapshot:", error);
+    });
   },
-  deleteEvent(id){ this.setEvents(this.getEvents().filter(e=>e.id!==id)); }
+  
+  async saveEvent(ev) {
+    try {
+      if (!ev.id) ev.id = uid();
+      // On met à jour le cache local pour éviter tout clignotement
+      const i = this.eventsCache.findIndex(e => e.id === ev.id);
+      if (i >= 0) this.eventsCache[i] = ev; 
+      else this.eventsCache.push(ev);
+      
+      // On envoie à Firebase (qui notifiera tout le monde)
+      await db.collection('events').doc(ev.id).set(ev);
+    } catch (e) {
+      console.error("❌ Erreur Firebase Save:", e);
+      alert("Erreur de sauvegarde Cloud.");
+    }
+  },
+  
+  async deleteEvent(id) {
+    try {
+      this.eventsCache = this.eventsCache.filter(e => e.id !== id);
+      await db.collection('events').doc(id).delete();
+    } catch (e) {
+      console.error("❌ Erreur Firebase Delete:", e);
+    }
+  }
 };
+
 
 // Current state
 // =============================================
@@ -1235,7 +1310,7 @@ function selectColor(el, inputId){
 // =============================================
 // HOME
 // =============================================
-function renderHome(){
+async function renderHome(){
   const evs = STORE.getEvents();
   const container = document.getElementById('eventsList');
   if(!evs.length){
@@ -1268,12 +1343,12 @@ function renderHome(){
 // =============================================
 // EVENT CRUD
 // =============================================
-function openEventModal(id=null){
+async function openEventModal(id=null){
   const fields=['eName','eLieu','eType','eChef','eNotes','eStart','eEnd','eEditId'];
   fields.forEach(f=>{ const el=document.getElementById(f); if(el) el.value=''; });
   document.getElementById('modalEventTitle').textContent = id ? 'Modifier l\'événement' : 'Nouvel événement';
   if(id){
-    const ev=STORE.getEvent(id);
+    const ev=await STORE.getEvent(id);
     if(!ev) return;
     document.getElementById('eName').value=ev.name||'';
     document.getElementById('eLieu').value=ev.lieu||'';
@@ -1287,7 +1362,7 @@ function openEventModal(id=null){
   openModal('modalEvent');
 }
 
-function saveEvent(){
+async function saveEvent(){
   const name=document.getElementById('eName').value.trim();
   const lieu=document.getElementById('eLieu').value.trim();
   const dateStart=document.getElementById('eStart').value;
@@ -1295,8 +1370,7 @@ function saveEvent(){
   if(!name||!dateStart||!dateEnd){ alert('Nom, dates de début et fin sont obligatoires.'); return; }
   if(dateEnd<dateStart){ alert('La date de fin doit être après la date de début.'); return; }
   const editId=document.getElementById('eEditId').value;
-  const ev = editId ? (STORE.getEvent(editId)||{}) : {};
-  ev.id = ev.id || uid();
+  const ev = editId ? (await STORE.getEvent(editId)||{}) : {};
   ev.name=name; ev.lieu=lieu;
   ev.type=document.getElementById('eType').value;
   ev.chef=document.getElementById('eChef').value.trim();
@@ -1311,23 +1385,23 @@ function saveEvent(){
   ev.contacts=ev.contacts||[];
   ev.transport=ev.transport||[];
   ev.acces=ev.acces||{methode:'',adresse:'',parking:'',codes:'',notes:''};
-  STORE.saveEvent(ev);
+ await STORE.saveEvent(ev);
   closeModal('modalEvent');
   if(currentEventId) renderEventHeader();
   else renderHome();
 }
 
-function deleteCurrentEvent(){
+async function deleteCurrentEvent(){
   if(!confirm('Supprimer cet événement et toutes ses données ?')) return;
-  STORE.deleteEvent(currentEventId);
+  await STORE.deleteEvent(currentEventId);
   showHome();
 }
 
 // =============================================
 // EXPORT PDF
 
-function exportPDF() {
-  const ev = STORE.getEvent(currentEventId);
+async function exportPDF() {
+  const ev = await STORE.getEvent(currentEventId);
   if (!ev) return;
 
   const generateDocument = () => {
@@ -1514,8 +1588,8 @@ function exportPDF() {
 // =============================================
 // EVENT HEADER & TABS
 // =============================================
-function renderEventHeader(){
-  const ev=STORE.getEvent(currentEventId);
+async function renderEventHeader(){
+  const ev=await STORE.getEvent(currentEventId);
   if(!ev) return;
   document.getElementById('evtTitle').textContent=ev.name;
   const days=getEventDays(ev).length;
@@ -1563,92 +1637,94 @@ function renderTab(tab) {
   }
 }
 
-// =============================================
-// TAB: PERSONNEL - RENDER
-// =============================================
-function renderPersonnel(){
-  const ev=STORE.getEvent(currentEventId);
-  const tc=document.getElementById('tabContent');
-  const personnel=(ev.personnel||[]);
-  
-  let html=`<div class="section-header">
-    <div class="section-title">👥 Personnel <span style="color:var(--text-muted);font-weight:400;font-size:0.9rem">(${personnel.length})</span></div>
-<button class="btn btn-primary" onclick="openPersonnelModal()">＋ Ajouter un technicien</button>
-  </div>`;
-  
-  if(!personnel.length){
-    html+=`<div class="empty-state"><div class="empty-icon">👤</div><p>Aucun technicien ajouté.</p><button class="btn btn-primary" onclick="openPersonnelModal()">＋ Ajouter un technicien</button></div>`;
-    tc.innerHTML=html;
-    return;
-  }
-  
-  // Grouper par métier
-  const groupedByMetier={};
-  personnel.forEach(p=>{
-    if(!groupedByMetier[p.metier]) groupedByMetier[p.metier]=[];
-    groupedByMetier[p.metier].push(p);
-  });
-  
-  html+=`<div style="display:flex;flex-direction:column;gap:24px">`;
-  
-  Object.entries(groupedByMetier).forEach(([metier,persons])=>{
-    const color=METIER_COLORS[metier]||'#999';
-    html+=`<div>
-      <h3 style="color:${color};margin-bottom:16px;display:flex;align-items:center;gap:8px">
-        <span style="width:12px;height:12px;border-radius:50%;background:${color}"></span>
-        ${METIER_LABELS[metier]||metier} <span style="color:var(--text-muted);font-weight:400;font-size:0.9rem">(${persons.length})</span>
-      </h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">`;
-      
-      persons.forEach(p=>{
-        const posteColor=POSTE_COLORS[p.poste]||'#6B7280';
-        html+=`<div class="personnel-card" style="border-top:3px solid ${posteColor}">
-          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
-            <div>
-              <div style="font-weight:700;font-size:1rem">${p.prenom} ${p.nom.toUpperCase()}</div>
-              <div style="font-size:0.8rem;color:${posteColor};font-weight:600;text-transform:uppercase;margin-top:2px">${POSTE_LABELS[p.poste]||p.poste}</div>
-            </div>
-            <div style="display:flex;gap:4px">
-              <button class="btn btn-ghost btn-icon btn-sm" onclick="openPersonnelModal('${p.id}')">✏️</button>
-              <button class="btn btn-danger btn-icon btn-sm" onclick="deletePersonnel('${p.id}')">🗑️</button>
-            </div>
-          </div>
-          
-          <div style="display:flex;flex-direction:column;gap:8px;font-size:0.85rem;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px">
-            ${p.tel?`<div style="display:flex;align-items:center;gap:8px">
-              <span style="color:var(--text-muted)">📱</span>
-              <span style="font-family:monospace;font-weight:500">${p.tel}</span>
-            </div>`:''}
-            ${p.mail?`<div style="display:flex;align-items:center;gap:8px">
-              <span style="color:var(--text-muted)">✉️</span>
-              <span style="font-size:0.8rem;color:var(--text-soft);word-break:break-all">${p.mail}</span>
-            </div>`:''}
-          </div>
-          
-          ${p.allergies?`<div style="background:rgba(239,68,68,0.1);border-left:3px solid var(--error);padding:8px;border-radius:4px;margin-bottom:12px;font-size:0.8rem">
-            <div style="color:var(--error);font-weight:600;margin-bottom:2px">⚠️ Restrictions alimentaires</div>
-            <div style="color:var(--text-soft)">${p.allergies}</div>
-          </div>`:''}
-          
-          ${p.notes?`<div style="font-size:0.8rem;color:var(--text-soft);padding:8px;background:var(--bg-input);border-radius:4px">${p.notes}</div>`:''}
-        </div>`;
-      });
-      
-      html+=`</div></div>`;
-    });
-    
-  html+=`</div>`;
-  tc.innerHTML=html;
 
-initSortable('personnel', 'personnelGrid'); 
+
+function openPersonnelModal(id = null) {
+  // Reset du formulaire
+  const formIds = ['pPrenom', 'pNom', 'pTel', 'pMail', 'pAllergies', 'pNotes', 'pEditId'];
+  formIds.forEach(fid => { const el = document.getElementById(fid); if(el) el.value = ''; });
+
+  STORE.getEvent(currentEventId).then(ev => {
+    const days = getEventDays(ev);
+    const container = document.getElementById('pPlanningDays');
+    let selectedDays = [];
+    
+    if (id) {
+      const p = (ev.personnel || []).find(x => x.id === id);
+      if (p) {
+        document.getElementById('pPrenom').value = p.prenom || '';
+        document.getElementById('pNom').value = p.nom || '';
+        document.getElementById('pTel').value = p.tel || '';
+        document.getElementById('pMail').value = p.mail || '';
+        document.getElementById('pMetier').value = p.metier || 'lumiere';
+        document.getElementById('pPoste').value = p.poste || 'technicien';
+        document.getElementById('pAllergies').value = p.allergies || '';
+        document.getElementById('pNotes').value = p.notes || '';
+        document.getElementById('pEditId').value = id;
+        selectedDays = p.days || [];
+      }
+    } else {
+      selectedDays = [...days]; // Par défaut cocher tous les jours
+    }
+
+    if(container) {
+      container.innerHTML = days.map(d => `
+        <div class="day-chip ${selectedDays.includes(d) ? 'active' : ''}" data-day="${d}" onclick="this.classList.toggle('active')" style="display:inline-block; padding:5px 10px; margin:2px; border:1px solid var(--border); border-radius:20px; cursor:pointer; font-size:0.8rem;">
+          ${formatDateShort(d)}
+        </div>`).join('');
+    }
+    openModal('modalPersonnel');
+  });
 }
 
+async function savePersonnel() {
+  const prenom = document.getElementById('pPrenom').value.trim();
+  const nom = document.getElementById('pNom').value.trim();
+  const tel = document.getElementById('pTel').value.trim();
+
+  if (!prenom || !nom || !tel) { alert('Champs obligatoires manquants'); return; }
+
+  const ev = await STORE.getEvent(currentEventId);
+  const editId = document.getElementById('pEditId').value;
+  const days = [...document.querySelectorAll('#pPlanningDays .day-chip.active')].map(c => c.dataset.day);
+
+  const person = {
+    id: editId || uid(),
+    prenom, nom, tel,
+    mail: document.getElementById('pMail').value.trim(),
+    metier: document.getElementById('pMetier').value,
+    poste: document.getElementById('pPoste').value,
+    allergies: document.getElementById('pAllergies').value.trim(),
+    notes: document.getElementById('pNotes').value.trim(),
+    days: days
+  };
+
+  if (!ev.personnel) ev.personnel = [];
+  if (editId) {
+    const idx = ev.personnel.findIndex(p => p.id === editId);
+    if (idx >= 0) ev.personnel[idx] = person;
+  } else {
+    ev.personnel.push(person);
+  }
+
+  await STORE.saveEvent(ev);
+  closeModal('modalPersonnel');
+  renderPersonnel();
+}
+
+async function deletePersonnel(id) {
+  if (!confirm('Supprimer ce technicien ?')) return;
+  const ev = await STORE.getEvent(currentEventId);
+  ev.personnel = (ev.personnel || []).filter(p => p.id !== id);
+  await STORE.saveEvent(ev);
+  renderPersonnel();
+}
 
 // =============================================
 // TAB: INFOS
 // =============================================
-function renderInfos(){
-  const ev=STORE.getEvent(currentEventId);
+async function renderInfos(){
+  const ev=await STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   tc.innerHTML=`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:800px">
@@ -1718,8 +1794,8 @@ const POSTE_LABELS={
 };
 
 
-function renderPersonnel(){
-  const ev=STORE.getEvent(currentEventId);
+async function renderPersonnel(){
+  const ev=await STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const personnel=ev.personnel||[];
   // Group by metier
@@ -1777,50 +1853,80 @@ function personCardHTML(p, color) {
 
 function toggleDayChip(el){ el.classList.toggle('active'); }
 
-function savePerson(){
-  const prenom=document.getElementById('pPrenom').value.trim();
-  const nom=document.getElementById('pNom').value.trim();
-  const tel=document.getElementById('pTel').value.trim();
-  if(!prenom||!nom||!tel){ alert('Prénom, nom et téléphone sont obligatoires.'); return; }
-  const ev=STORE.getEvent(currentEventId);
-  const editId=document.getElementById('pEditId').value;
-  const days=[...document.querySelectorAll('#personDaysContainer .day-chip.active')].map(c=>c.dataset.day);
-  const person={
-    id: editId||uid(),
-    prenom,nom,tel,
-    mail:document.getElementById('pMail').value.trim(),
-    metier:document.getElementById('pMetier').value,
-    poste:document.getElementById('pPoste').value,
-    allergies:document.getElementById('pAllergies').value.trim(),
-    notes:document.getElementById('pNotes').value.trim(),
+async function savePersonnel() {
+  // 1. Récupération sécurisée des champs obligatoires
+  const prenomEl = document.getElementById('pPrenom');
+  const nomEl = document.getElementById('pNom');
+  const telEl = document.getElementById('pTel');
+  
+  const prenom = prenomEl ? prenomEl.value.trim() : '';
+  const nom = nomEl ? nomEl.value.trim() : '';
+  const tel = telEl ? telEl.value.trim() : '';
+  
+  if (!prenom || !nom || !tel) { 
+    alert('Prénom, nom et téléphone sont obligatoires.'); 
+    return; 
+  }
+  
+  const ev = await STORE.getEvent(currentEventId);
+  const editId = document.getElementById('pEditId').value;
+  
+  // 2. CORRECTION : Recherche des jours cochés dans le bon conteneur (#pPlanningDays)
+  const days = [...document.querySelectorAll('#pPlanningDays .day-chip.active')].map(c => c.dataset.day);
+  
+  // Sécurisation de l'email (au cas où vous l'ayez retiré du HTML)
+  const mailEl = document.getElementById('pMail');
+  const mail = mailEl ? mailEl.value.trim() : '';
+
+  const person = {
+    id: editId || uid(),
+    prenom, 
+    nom, 
+    tel,
+    mail,
+    metier: document.getElementById('pMetier').value,
+    poste: document.getElementById('pPoste').value,
+    allergies: document.getElementById('pAllergies').value.trim(),
+    notes: document.getElementById('pNotes').value.trim(),
     days
   };
-  if(editId){
-    const i=(ev.personnel||[]).findIndex(p=>p.id===editId);
-    if(i>=0) ev.personnel[i]=person;
+  
+  if (editId) {
+    const i = (ev.personnel || []).findIndex(p => p.id === editId);
+    if (i >= 0) ev.personnel[i] = person;
   } else {
-    ev.personnel=ev.personnel||[];
+    ev.personnel = ev.personnel || [];
     ev.personnel.push(person);
   }
-  STORE.saveEvent(ev);
-  closeModal('modalPerson');
+  
+  // Sauvegarde dans Firebase
+  await STORE.saveEvent(ev);
+  
+  // 3. CORRECTION : Fermeture de la bonne modale 'modalPersonnel' (évite le crash)
+  closeModal('modalPersonnel');
+  
+  // 4. Rafraîchissement de l'affichage (fonctionne de nouveau !)
   renderPersonnel();
-  autoCreateTeams();
+  
+  // Mise à jour auto des équipes
+  if (typeof autoCreateTeams === 'function') {
+    autoCreateTeams();
+  }
 }
 
-function deletePerson(id){
+async function deletePerson(id){
   if(!confirm('Supprimer ce technicien ?')) return;
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   ev.personnel=(ev.personnel||[]).filter(p=>p.id!==id);
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   renderPersonnel();
 }
 
 // =============================================
 // TAB: ÉQUIPES
 // =============================================
-function autoCreateTeams(){
-  const ev=STORE.getEvent(currentEventId);
+async function autoCreateTeams(){
+  const ev=await STORE.getEvent(currentEventId);
   const personnel=ev.personnel||[];
   const metiers=[...new Set(personnel.map(p=>p.metier))];
   const existing=ev.equipes||[];
@@ -1837,11 +1943,11 @@ function autoCreateTeams(){
   });
   // remove auto teams for metiers no longer used
   ev.equipes=existing.filter(t=>!t.auto||metiers.includes(t.metier));
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
 }
 
-function renderEquipes(){
-  const ev=STORE.getEvent(currentEventId);
+async function renderEquipes(){
+  const ev=await STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const equipes=ev.equipes||[];
   let html=`<div class="section-header"><div class="section-title">🏃 Équipes</div><button class="btn btn-primary" onclick="openTeamModal()">＋ Créer une équipe</button></div>`;
@@ -1879,8 +1985,8 @@ function renderEquipes(){
   tc.innerHTML=html;
 }
 
-function openTeamModal(id=null){
-  const ev=STORE.getEvent(currentEventId);
+async function openTeamModal(id=null){
+  const ev=await STORE.getEvent(currentEventId);
   document.getElementById('tName').value='';
   document.getElementById('tMetier').value='';
   document.getElementById('tColor').value='#4F46E5';
@@ -1906,8 +2012,8 @@ function openTeamModal(id=null){
   openModal('modalTeam');
 }
 
-function renderTeamMemberLists(selectedIds){
-  const ev=STORE.getEvent(currentEventId);
+async function renderTeamMemberLists(selectedIds){
+  const ev=await STORE.getEvent(currentEventId);
   const all=ev.personnel||[];
   const avail=document.getElementById('teamAvailableList');
   const sel=document.getElementById('teamSelectedList');
@@ -1929,10 +2035,10 @@ function toggleTeamMember(personId,adding){
   renderTeamMemberLists(sel);
 }
 
-function saveTeam(){
+async function saveTeam(){
   const name=document.getElementById('tName').value.trim();
   if(!name){ alert('Le nom de l\'équipe est obligatoire.'); return; }
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   const editId=document.getElementById('tEditId').value;
   const team={
     id:editId||uid(),
@@ -1949,16 +2055,16 @@ function saveTeam(){
     ev.equipes=ev.equipes||[];
     ev.equipes.push(team);
   }
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   closeModal('modalTeam');
   renderEquipes();
 }
 
-function deleteTeam(id){
+async function deleteTeam(id){
   if(!confirm('Supprimer cette équipe ?')) return;
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   ev.equipes=(ev.equipes||[]).filter(t=>t.id!==id);
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   renderEquipes();
 }
 
@@ -1970,15 +2076,12 @@ function getUsedMetiers(ev){
 }
 
 // =============================================
-// AFFICHAGE DU PLANNING (Horaires Dynamiques)
+// TAB: PLANNING (Version Pixel Perfect & Dynamique)
 // =============================================
-
-// =============================================
-// AFFICHAGE DU PLANNING (Horaires Dynamiques & Catering)
-// =============================================
-function renderPlanning() {
-  const ev = STORE.getEvent(currentEventId);
+async function renderPlanning() {
+  const ev = await STORE.getEvent(currentEventId);
   if (!ev) return;
+
   const tc = document.getElementById('tabContent');
   const days = getEventDays(ev);
   
@@ -1986,11 +2089,13 @@ function renderPlanning() {
   if (metiers.length === 0) metiers = ['lumiere', 'son', 'video', 'structure'];
 
   if (!days.length) {
-    tc.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div><p>Définissez les dates de l'événement dans l'onglet "Données" pour voir le planning.</p></div>`;
+    tc.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div><p>Définissez les dates de l'événement.</p></div>`;
     return;
   }
 
   const HOUR_H = 60; 
+  const HEADER_OFFSET = 38; // 📏 Espace pour le titre de la colonne (Lumière, Son...)
+
   let html = `
     <div class="section-header">
       <div class="section-title">📅 Planning</div>
@@ -1999,31 +2104,30 @@ function renderPlanning() {
     <div class="planning-container">`;
 
   days.forEach(day => {
-    // 1. CALCUL DYNAMIQUE DES HORAIRES (Sécurisé)
     const dayTasks = (ev.planning || []).filter(t => t && t.day === day);
-    const dayMeals = (ev.catering || []).filter(m => m && m.day === day && m.time); 
+    const dayMeals = (ev.catering || []).filter(m => m && m.day === day && m.time);
     
+    // CALCUL DYNAMIQUE DES HORAIRES
     let minHour = 24; 
-    let maxHour = 6;
+    let maxHour = 0;
+    
+    const allItemsForRange = [...dayTasks, ...dayMeals.map(m => ({ timeStart: m.time, timeEnd: m.time }))];
 
-    const allItems = [...dayTasks, ...dayMeals.map(m => ({ timeStart: m.time, timeEnd: m.time }))];
-
-    if (allItems.length > 0) {
-      allItems.forEach(t => {
+    if (allItemsForRange.length > 0) {
+      allItemsForRange.forEach(t => {
         if (!t.timeStart) return;
         const [sh] = t.timeStart.split(':').map(Number);
-        const ehStr = t.timeEnd || t.timeStart; 
-        const [eh, em] = ehStr.split(':').map(Number);
-
+        const [eh, em] = (t.timeEnd || t.timeStart).split(':').map(Number);
+        
         let sH = sh < 6 ? sh + 24 : sh;
         let eH = eh < 6 ? eh + 24 : eh;
-        if (em > 0) eH += 1; 
-
+        if (em > 0) eH += 1;
+        
         if (sH < minHour) minHour = sH;
         if (eH > maxHour) maxHour = eH;
       });
-      minHour -= 1;
-      maxHour += 1;
+      minHour -= 1; // 1h de marge avant
+      maxHour += 1; // 1h de marge après
     } else {
       minHour = 8;
       maxHour = 20;
@@ -2031,115 +2135,141 @@ function renderPlanning() {
 
     const START_HOUR = minHour;
     const END_HOUR = maxHour;
-    const TOTAL_HOURS = END_HOUR - START_HOUR;
+    
+    // 📏 Calcul de la hauteur exacte requise pour la colonne
+    const columnHeight = ((END_HOUR - START_HOUR) * HOUR_H) + HEADER_OFFSET;
 
-    // 2. GÉNÉRATION DE LA GRILLE DU JOUR
     html += `
       <div class="planning-day-section">
         <div class="planning-day-title">📆 ${formatDate(day)}</div>
         <div class="planning-body">
-          <div class="planning-time-col">`;
-
+          
+          <!-- COLONNE DES HEURES (Gauches) -->
+          <div class="planning-time-col">
+            <div style="height:${HEADER_OFFSET}px;"></div> <!-- Décalage d'en-tête -->`;
+    
     for (let h = START_HOUR; h < END_HOUR; h++) {
       const displayH = h >= 24 ? h - 24 : h;
-      html += `<div class="planning-time-slot" style="height:${HOUR_H}px; display:flex; align-items:flex-start; justify-content:flex-end; padding-right:8px; box-sizing:border-box; margin:0;">
+      html += `<div class="planning-time-slot" style="height:${HOUR_H}px; display:flex; align-items:flex-start; justify-content:center; box-sizing:border-box; margin:0; padding:0;">
                  <span style="position:relative; top:-8px;">${String(displayH).padStart(2, '0')}:00</span>
                </div>`;
     }
-    
     html += `</div><div class="planning-cols">`;
 
+    // COLONNES MÉTIERS
     metiers.forEach(metier => {
       const colId = `col-${day.replace(/-/g,'')}-${metier.replace(/\s+/g,'')}`;
       
-      html += `<div class="planning-col" id="${colId}" onclick="planningColClick(event,'${day}','${metier}', ${START_HOUR})">
-        <div class="planning-col-header" style="color:${METIER_COLORS[metier]||'#fff'}">${METIER_LABELS[metier]||metier}</div>
-        <div class="planning-col-lines">
-          ${Array(TOTAL_HOURS).fill(0).map((_,i)=>`<div class="planning-hour-line" style="top:${i*HOUR_H}px; height:${HOUR_H}px"></div>`).join('')}
-        </div>`;
-        
+      // On écrase le min-height du CSS avec inline style dynamiquement
+      html += `
+        <div class="planning-col" id="${colId}" onclick="planningColClick(event, '${day}', '${metier}', ${START_HOUR})" style="min-height: ${columnHeight}px !important; height: ${columnHeight}px;">
+          
+          <div style="position:absolute; top:0; left:0; right:0; height:${HEADER_OFFSET}px; background:var(--bg-card); z-index:20; border-bottom:1px solid var(--border); padding:8px; text-align:center; font-weight:700; font-size:0.8rem; text-transform:uppercase; color:${METIER_COLORS[metier] || 'var(--primary)'};">
+            ${METIER_LABELS[metier] || metier}
+          </div>
+          
+          <div class="planning-col-lines">`;
+          
+      for (let h = START_HOUR; h < END_HOUR; h++) {
+        // Décalage des lignes
+        html += `<div class="planning-hour-line" style="top:${(h - START_HOUR) * HOUR_H + HEADER_OFFSET}px"></div>`;
+      }
+      html += `</div>`;
+
       let colTasks = dayTasks.filter(t => (t.metiers && t.metiers.includes(metier)) || t.metier === metier);
-      
-      colTasks.sort((a, b) => {
-        if (!a.timeStart || !b.timeStart) return 0;
-        const getDur = (t) => {
-          const [h1, m1] = t.timeStart.split(':').map(Number);
-          const [h2, m2] = (t.timeEnd || t.timeStart).split(':').map(Number);
-          let start = (h1 < 6 ? h1 + 24 : h1) * 60 + m1;
-          let end = (h2 < 6 ? h2 + 24 : h2) * 60 + m2;
-          return end - start;
-        };
-        return getDur(b) - getDur(a);
-      });
-      
-      // AFFICHAGE TÂCHES STANDARD
-      colTasks.forEach((task, index) => {
-        if (!task.timeStart) return;
-        const [sh, sm] = task.timeStart.split(':').map(Number);
-        const [eh, em] = (task.timeEnd || task.timeStart).split(':').map(Number);
-        
-        let sH = sh < 6 ? sh + 24 : sh;
-        let eH = eh < 6 ? eh + 24 : eh;
-        
-        const top = ((sH * 60 + sm) - (START_HOUR * 60)) / 60 * HOUR_H + 30; 
-        const height = Math.max(20, ((eH * 60 + em) - (sH * 60 + sm)) / 60 * HOUR_H);
-        
-        const textColor = isLightColor(task.color) ? '#000' : '#fff';
-        const zIndex = 10 + index;
-
-        html += `
-          <div class="planning-task" style="top:${top}px; height:${height}px; background:${task.color}; color:${textColor}; z-index:${zIndex}; border: 1px solid rgba(0,0,0,0.2); overflow: hidden; display:flex; flex-direction:column; justify-content:center; padding: 2px 4px; box-sizing: border-box;" onclick="event.stopPropagation(); openTaskModal('${task.id}')">
-            
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:4px; width:100%;">
-              <div style="flex:1; display:flex; align-items:center; gap:4px; overflow:hidden; white-space:nowrap;">
-                 <span class="drag-handle" style="cursor:grab; opacity:0.7; font-size:0.8rem;">☰</span>
-                 <strong style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; flex-shrink:0;">${task.timeStart}-${task.timeEnd}</strong>
-                 <span style="font-weight:600; font-size:0.75rem; overflow:hidden; text-overflow:ellipsis;">${task.title}</span>
-              </div>
-              <div style="display:flex; gap:3px; flex-shrink:0;">
-                <button class="btn" style="padding:1px 4px; background:rgba(0,0,0,0.15); border:none; color:inherit; font-size:10px; cursor:pointer; border-radius:3px;" onclick="event.stopPropagation(); openTaskModal('${task.id}', null, null, null, null, true)" title="Dupliquer">👯</button>
-                <button class="btn" style="padding:1px 4px; background:var(--error); border:none; color:white; font-size:10px; cursor:pointer; border-radius:3px;" onclick="event.stopPropagation(); deleteTask('${task.id}')" title="Supprimer">🗑️</button>
-              </div>
-            </div>
-            ${task.notes ? `<div style="font-size: 0.65rem; opacity: 0.85; white-space: nowrap; overflow:hidden; text-overflow:ellipsis; padding-left: 18px; margin-top: 2px;">${task.notes}</div>` : ''}
-          </div>`;
-      });
-
-      // AFFICHAGE REPAS (CATERING) - Z-INDEX 500 POUR PASSER AU-DESSUS
       let colMeals = dayMeals.filter(m => (m.persons || []).some(pid => {
         const p = (ev.personnel || []).find(pers => pers.id === pid);
         return p && p.metier === metier;
       }));
 
-      colMeals.forEach((meal) => {
-        if (!meal.time) return;
-        const [sh, sm] = meal.time.split(':').map(Number);
-        let sH = sh < 6 ? sh + 24 : sh;
-        const startMin = (sH * 60 + sm) - (START_HOUR * 60);
-        const top = (startMin / 60 * HOUR_H) + 30;
+      const allItems = [
+        ...colTasks.map(t => ({...t, isMeal: false})),
+        ...colMeals.map(m => ({...m, isMeal: true, title: `🍽️ ${m.type.toUpperCase()}`, timeStart: m.time, timeEnd: m.time}))
+      ];
+
+            allItems.forEach((task, index) => {
+        const [sh, sm] = task.timeStart.split(':').map(Number);
+        let [eh, em] = (task.timeEnd || task.timeStart).split(':').map(Number);
         
+        let sH = sh < 6 ? sh + 24 : sh;
+        let eH = eh < 6 ? eh + 24 : eh;
+        
+        // Un repas dure conventionnellement 1h sur le planning
+        if (task.isMeal) { eH = sH + 1; em = sm; }
+
+        const startMin = (sH * 60 + sm) - (START_HOUR * 60);
+        const endMin = (eH * 60 + em) - (START_HOUR * 60);
+        
+        const top = ((startMin / 60) * HOUR_H) + HEADER_OFFSET; 
+        const height = Math.max(20, ((endMin - startMin) / 60) * HOUR_H);
+        
+        const bgColor = task.isMeal ? '#10B981' : task.color;
+        const textColor = isLightColor(bgColor) ? '#000' : '#fff';
+        const clickAction = task.isMeal ? `openMealModal('${task.id}')` : `openTaskModal('${task.id}')`;
+        const zIndex = task.isMeal ? 500 : 10 + index;
+        const borderStyle = task.isMeal ? '2px dashed rgba(255,255,255,0.5)' : '1px solid rgba(0,0,0,0.2)';
+
+        // --- LOGIQUE ANTI-COLLISION DE TEXTE ---
+        let paddingTop = 4;
+        let justify = "flex-start";
+
+        if (!task.isMeal) {
+          // On vérifie si un repas commence en même temps que la tâche
+          const hasMealAtTop = colMeals.some(m => {
+            const [mh, mm] = m.time.split(':').map(Number);
+            const mH = mh < 6 ? mh + 24 : mh;
+            const mStartMin = (mH * 60 + mm) - (START_HOUR * 60);
+            const mealTop = ((mStartMin / 60) * HOUR_H) + HEADER_OFFSET;
+            return Math.abs(mealTop - top) < 15; // Collision si écart < 15px
+          });
+
+          if (hasMealAtTop) {
+            paddingTop = 45; // On descend le texte pour laisser place au bandeau repas
+          }
+        } else {
+          justify = "center"; // Le texte du repas est centré verticalement
+        }
+
         html += `
-          <div class="planning-task" style="top:${top}px; height:40px; background:#10B981; color:white; z-index:500; border: 2px dashed rgba(255,255,255,0.6); overflow: hidden; display:flex; align-items:center; justify-content:space-between; padding: 0 8px; box-sizing: border-box; box-shadow: 0 2px 8px rgba(0,0,0,0.3);" onclick="event.stopPropagation(); openMealModal('${meal.id}')">
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span style="font-size:1.2rem;">🍴</span>
-              <div style="display:flex; flex-direction:column; line-height:1.1">
-                <strong style="font-size:0.7rem; font-family:'JetBrains Mono',monospace;">${meal.time}</strong>
-                <span style="font-weight:800; font-size:0.75rem; text-transform:uppercase;">${meal.type}</span>
+          <div class="planning-task" style="
+            top:${top}px; 
+            height:${height}px; 
+            background:${bgColor}; 
+            color:${textColor}; 
+            z-index:${zIndex}; 
+            border: ${borderStyle}; 
+            overflow: hidden; 
+            display:flex; 
+            flex-direction:column; 
+            justify-content:${justify}; 
+            padding: ${paddingTop}px 6px 4px 6px; 
+            box-sizing: border-box;" 
+            onclick="event.stopPropagation(); ${clickAction}">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:4px; width:100%;">
+              <div style="flex:1; display:flex; align-items:center; gap:4px; overflow:hidden; white-space:nowrap;">
+                 <span class="drag-handle" style="cursor:grab; opacity:0.7; font-size:0.8rem;">☰</span>
+                 <strong style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; flex-shrink:0;">${task.timeStart}${!task.isMeal ? '-'+task.timeEnd : ''}</strong>
+                 <span style="font-weight:600; font-size:0.75rem; overflow:hidden; text-overflow:ellipsis;">${task.title}</span>
+              </div>
+              <div style="display:flex; gap:3px; flex-shrink:0;">
+                ${!task.isMeal ? `<button class="btn" style="padding:1px 4px; background:rgba(0,0,0,0.15); border:none; color:inherit; font-size:10px; cursor:pointer; border-radius:3px;" onclick="event.stopPropagation(); openTaskModal('${task.id}', null, null, null, null, true)" title="Dupliquer">👯</button>` : ''}
+                ${!task.isMeal ? `<button class="btn" style="padding:1px 4px; background:var(--error); border:none; color:white; font-size:10px; cursor:pointer; border-radius:3px;" onclick="event.stopPropagation(); deleteTask('${task.id}')" title="Supprimer">🗑️</button>` : ''}
               </div>
             </div>
+            ${task.notes && height > 60 && !task.isMeal ? `<div style="font-size: 0.65rem; opacity: 0.85; white-space: nowrap; overflow:hidden; text-overflow:ellipsis; padding-left: 18px; margin-top: 2px;">${task.notes}</div>` : ''}
           </div>`;
       });
 
-      html += `</div>`; // Fin .planning-col
+      html += `</div>`;
     });
 
-    html += `</div></div></div>`; // Fin layout
+    html += `</div></div></div>`;
   });
 
-  html += `</div>`; // Fin container
+  html += `</div>`;
   tc.innerHTML = html;
 
-  // Initialisation SortableJS
   days.forEach(day => {
     metiers.forEach(metier => {
       const colId = `col-${day.replace(/-/g,'')}-${metier.replace(/\s+/g,'')}`;
@@ -2147,6 +2277,8 @@ function renderPlanning() {
     });
   });
 }
+
+
 
 
 function isLightColor(hex){
@@ -2175,47 +2307,24 @@ function planningColClick(e, day, metier, startHour = 6) {
 }
 
 
-function openTaskModal(id=null, preDay=null, preMetier=null, preStart=null, preEnd=null, isDuplicate=false){
-  const ev = STORE.getEvent(currentEventId);
+async function openTaskModal(id=null, preDay=null, preMetier=null, preStart=null, preEnd=null, isDuplicate=false){
+  const ev = await STORE.getEvent(currentEventId);
   const days = getEventDays(ev);
   let metiers = getUsedMetiers(ev);
-  
-  // Fallback si aucun personnel n'est créé
   if(!metiers.length) metiers = ['lumiere', 'son', 'video', 'structure'];
 
-  // 1. Reset des champs du formulaire
-  ['tkTitle', 'tkNotes', 'tkEditId', 'tkTeam'].forEach(f => {
+  // 1. Reset des champs
+  ['tkTitle', 'tkNotes', 'tkEditId'].forEach(f => {
     const el = document.getElementById(f);
     if(el) el.value = '';
   });
   document.getElementById('tkColor').value = '#4F46E5';
   
-  // Gestion du titre du Modal
-  const modalTitle = document.getElementById('modalTaskTitle');
-  if(isDuplicate) modalTitle.textContent = 'Dupliquer la tâche';
-  else modalTitle.textContent = id ? 'Modifier la tâche' : 'Ajouter une tâche';
-  
-  // 2. Remplir le select des jours (Restriction aux dates de l'event)
-  const ds = document.getElementById('tkDay');
-  if (days.length > 0) {
-    ds.innerHTML = days.map(d => `<option value="${d}">${formatDateShort(d)}</option>`).join('');
-  } else {
-    ds.innerHTML = `<option value="">⚠️ Définissez les dates en premier</option>`;
-  }
-
-  // 3. Générer les puces de catégories (Métiers)
-  const container = document.getElementById('tkMetiersContainer');
-  container.innerHTML = metiers.map(m => `
-    <label class="day-chip" style="cursor:pointer; display:flex; align-items:center; gap:5px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 20px;">
-      <input type="checkbox" class="tk-metier-cb" value="${m}" style="display:none">
-      ${(typeof METIER_LABELS !== 'undefined' ? METIER_LABELS[m] : m) || m}
-    </label>
-  `).join('');
-
+  // 2. Préparation des variables de sélection
   let selectedPersons = [];
   let taskMetiers = [];
+  let selectedTeams = [];
 
-  // 4. Chargement des données (Modif ou Duplication)
   if(id){
     const task = (ev.planning || []).find(t => t.id === id);
     if(task){
@@ -2224,64 +2333,99 @@ function openTaskModal(id=null, preDay=null, preMetier=null, preStart=null, preE
       document.getElementById('tkStart').value = task.timeStart || '08:00';
       document.getElementById('tkEnd').value = task.timeEnd || '12:00';
       document.getElementById('tkColor').value = task.color || '#4F46E5';
-      document.getElementById('tkTeam').value = task.team || '';
       document.getElementById('tkNotes').value = task.notes || '';
-      
-      // IMPORTANT : Si duplication, on laisse tkEditId vide pour créer un nouvel ID au saveTask()
       document.getElementById('tkEditId').value = isDuplicate ? '' : id;
-      
       selectedPersons = task.persons || [];
-      // Rétro-compatibilité : gère l'ancien format (metier unique) et le nouveau (tableau metiers)
       taskMetiers = task.metiers || (task.metier ? [task.metier] : []);
-      
-      // Mise à jour visuelle de la couleur sélectionnée
-      const co = document.querySelector(`#modalTask [data-color="${task.color}"]`);
-      if(co){ 
-        document.querySelectorAll('#modalTask .color-opt').forEach(o => o.classList.remove('selected')); 
-        co.classList.add('selected'); 
-      }
+      selectedTeams = task.teams || (task.team ? [task.team] : []); 
     }
   } else {
-    // Cas d'un nouvel ajout (clic sur un "+" du planning)
+    // Nouvel ajout
+    const ds = document.getElementById('tkDay');
     if(preDay) ds.value = preDay;
     if(preStart) document.getElementById('tkStart').value = preStart;
     if(preEnd) document.getElementById('tkEnd').value = preEnd;
     taskMetiers = preMetier ? [preMetier] : [metiers[0]];
-    document.getElementById('tkEditId').value = '';
   }
 
-  // 5. Activer visuellement les puces de catégories
-  document.querySelectorAll('.tk-metier-cb').forEach(cb => {
-    // Cocher si présent dans la tâche
-    if(taskMetiers.includes(cb.value)) {
-      cb.checked = true;
-      cb.parentElement.classList.add('active');
-      cb.parentElement.style.backgroundColor = 'var(--primary)';
-      cb.parentElement.style.color = 'white';
-    }
-    
-    // Gérer le changement d'état au clic
-    cb.addEventListener('change', (e) => {
-      if(e.target.checked) {
-        e.target.parentElement.classList.add('active');
-        e.target.parentElement.style.backgroundColor = 'var(--primary)';
-        e.target.parentElement.style.color = 'white';
-      } else {
-        e.target.parentElement.classList.remove('active');
-        e.target.parentElement.style.backgroundColor = 'transparent';
-        e.target.parentElement.style.color = 'inherit';
+  // 3. Remplir le select des JOURS
+  const ds = document.getElementById('tkDay');
+  ds.innerHTML = days.map(d => `<option value="${d}">${formatDateShort(d)}</option>`).join('');
+
+  // 4. Générer les puces MÉTIERS
+  const metContainer = document.getElementById('tkMetiersContainer');
+  metContainer.innerHTML = metiers.map(m => `
+    <label class="day-chip ${taskMetiers.includes(m)?'active':''}" style="cursor:pointer; display:flex; align-items:center; gap:5px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 20px; ${taskMetiers.includes(m)?'background:var(--primary);color:white;':''}">
+      <input type="checkbox" class="tk-metier-cb" value="${m}" ${taskMetiers.includes(m)?'checked':''} style="display:none">
+      ${(typeof METIER_LABELS !== 'undefined' ? METIER_LABELS[m] : m)}
+    </label>
+  `).join('');
+
+  // 5. Générer les puces ÉQUIPES (Multi-sélection)
+  const teamContainer = document.getElementById('tkTeamsContainer');
+  teamContainer.innerHTML = (ev.equipes || []).map(t => `
+    <label class="day-chip ${selectedTeams.includes(t.id)?'active':''}" style="cursor:pointer; display:flex; align-items:center; gap:5px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 20px; ${selectedTeams.includes(t.id)?'background:var(--secondary);color:white;':''}">
+      <input type="checkbox" class="tk-team-cb" value="${t.id}" ${selectedTeams.includes(t.id)?'checked':''} style="display:none">
+      👥 ${t.name}
+    </label>
+  `).join('');
+
+  // 6. LOGIQUE : Quand on coche/décoche une équipe -> Ajoute ou Retire le personnel
+  document.querySelectorAll('.tk-team-cb').forEach(cb => {
+    cb.addEventListener('change', async (e) => {
+      const teamId = e.target.value;
+      const isChecked = e.target.checked;
+      const team = ev.equipes.find(t => t.id === teamId);
+      
+      // Style visuel
+      e.target.parentElement.style.background = isChecked ? 'var(--secondary)' : 'transparent';
+      e.target.parentElement.style.color = isChecked ? 'white' : 'inherit';
+
+      if (team && team.members) {
+        let currentPers = JSON.parse(document.getElementById('tkPersons').value || '[]');
+
+        if (isChecked) {
+          // AJOUTER les membres sans doublons
+          team.members.forEach(mId => {
+            if (!currentPers.includes(mId)) currentPers.push(mId);
+          });
+        } else {
+          // RETIRER les membres de cette équipe
+          currentPers = currentPers.filter(mId => !team.members.includes(mId));
+        }
+
+        document.getElementById('tkPersons').value = JSON.stringify(currentPers);
+        renderTaskPersonLists(currentPers);
       }
     });
   });
 
-  // 6. Rafraîchir la liste du personnel assigné et ouvrir
+  // Listener pour les métiers (visuel uniquement)
+  document.querySelectorAll('.tk-metier-cb').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      e.target.parentElement.style.background = e.target.checked ? 'var(--primary)' : 'transparent';
+      e.target.parentElement.style.color = e.target.checked ? 'white' : 'inherit';
+    });
+  });
+
+  // 7. Init Personnel
   document.getElementById('tkPersons').value = JSON.stringify(selectedPersons);
   renderTaskPersonLists(selectedPersons);
+
+  const btnDelete = document.getElementById('btnDeleteTask');
+  if (id && !isDuplicate) {
+    btnDelete.style.display = 'block';
+    btnDelete.style.setProperty('display', 'block', 'important'); // Forçage CSS
+    console.log("Le bouton devrait être visible.");
+  } else {
+    btnDelete.style.display = 'none';
+  }
+  
   openModal('modalTask');
 }
 
-function renderTaskPersonLists(selectedIds){
-  const ev=STORE.getEvent(currentEventId);
+async function renderTaskPersonLists(selectedIds){
+  const ev=await STORE.getEvent(currentEventId);
   const all=ev.personnel||[];
   const makeItem=(p,toSel)=>`<div class="catering-person-item" onclick="toggleTaskPerson('${p.id}',${toSel})">
     <span>${p.prenom} ${p.nom.toUpperCase()}</span>
@@ -2298,50 +2442,100 @@ function toggleTaskPerson(pid,adding){
   renderTaskPersonLists(sel);
 }
 
-function saveTask(){
-  const title=document.getElementById('tkTitle').value.trim();
-  const day=document.getElementById('tkDay').value;
-  const timeStart=document.getElementById('tkStart').value;
-  const timeEnd=document.getElementById('tkEnd').value;
+// Fonction utilitaire pour calculer les chevauchements horaires (gère la nuit)
+function timeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  const adjustedH = h < 6 ? h + 24 : h; // Les heures < 6h du mat sont comptées pour le lendemain
+  return adjustedH * 60 + m;
+}
+
+async function saveTask() {
+  const title = document.getElementById('tkTitle').value.trim();
+  const day = document.getElementById('tkDay').value;
+  const timeStart = document.getElementById('tkStart').value;
+  const timeEnd = document.getElementById('tkEnd').value;
   
-  // Récupérer tous les métiers cochés
+  // 1. Récupérer tous les métiers cochés (badges)
   const metiersCb = Array.from(document.querySelectorAll('.tk-metier-cb:checked')).map(cb => cb.value);
   
-  if(!title||!day||!timeStart||!timeEnd||!metiersCb.length){ 
+  // 2. NOUVEAU : Récupérer toutes les équipes cochées (badges)
+  const teamsCb = Array.from(document.querySelectorAll('.tk-team-cb:checked')).map(cb => cb.value);
+  
+  if(!title || !day || !timeStart || !timeEnd || !metiersCb.length){ 
     alert('Titre, jour, horaires et au moins une catégorie sont obligatoires.'); 
     return; 
   }
 
-  const ev=STORE.getEvent(currentEventId);
-  const editId=document.getElementById('tkEditId').value;
-  
-  const task={
-    id:editId||uid(),
-    title,day,timeStart,timeEnd,
-    metiers: metiersCb, // On enregistre un tableau [son, lumiere, etc.]
-    color:document.getElementById('tkColor').value||'#4F46E5',
-    team:document.getElementById('tkTeam').value,
-    persons:JSON.parse(document.getElementById('tkPersons').value||'[]'),
-    notes:document.getElementById('tkNotes').value.trim()
+  const ev = await STORE.getEvent(currentEventId);
+  const editId = document.getElementById('tkEditId').value;
+  const persons = JSON.parse(document.getElementById('tkPersons').value || '[]');
+
+  // ==========================================
+  // 🚨 DÉTECTION DE CONFLITS (Inchangé)
+  // ==========================================
+  const startMin = timeToMinutes(timeStart);
+  const endMin = timeToMinutes(timeEnd);
+  let conflicts = [];
+
+  if (persons.length > 0) {
+    const otherTasks = (ev.planning || []).filter(t => t.day === day && t.id !== editId && t.persons);
+    
+    for (const pid of persons) {
+      const person = (ev.personnel || []).find(p => p.id === pid);
+      if (!person) continue;
+
+      for (const t of otherTasks) {
+        if (t.persons.includes(pid)) {
+          const tStart = timeToMinutes(t.timeStart);
+          const tEnd = timeToMinutes(t.timeEnd);
+          if (startMin < tEnd && endMin > tStart) {
+            conflicts.push(`- ${person.prenom} ${person.nom.toUpperCase()} est déjà sur "${t.title}" (${t.timeStart}-${t.timeEnd})`);
+          }
+        }
+      }
+    }
+  }
+
+  if (conflicts.length > 0) {
+    const msg = "⚠️ ATTENTION : Conflit(s) d'horaire détecté(s) :\n\n" + 
+                conflicts.join("\n") + 
+                "\n\nVoulez-vous quand même enregistrer cette tâche (forcer) ?";
+    if (!confirm(msg)) return; 
+  }
+  // ==========================================
+
+  // 3. Construction de l'objet Task (Mise à jour pour 'teams')
+  const task = {
+    id: editId || uid(),
+    title, 
+    day, 
+    timeStart, 
+    timeEnd,
+    metiers: metiersCb, 
+    teams: teamsCb, // On enregistre maintenant le tableau des IDs d'équipes
+    color: document.getElementById('tkColor').value || '#4F46E5',
+    persons,
+    notes: document.getElementById('tkNotes').value.trim()
   };
   
-  if(editId){
-    const i=(ev.planning||[]).findIndex(t=>t.id===editId);
-    if(i>=0) ev.planning[i]=task;
+  if (editId) {
+    const i = (ev.planning || []).findIndex(t => t.id === editId);
+    if (i >= 0) ev.planning[i] = task;
   } else {
-    ev.planning=ev.planning||[];
+    ev.planning = ev.planning || [];
     ev.planning.push(task);
   }
-  STORE.saveEvent(ev);
+  
+  await STORE.saveEvent(ev);
   closeModal('modalTask');
   renderPlanning();
 }
-
 // =============================================
 // TAB: CATERING
 // =============================================
-function renderCatering(){
-  const ev=STORE.getEvent(currentEventId);
+async function renderCatering(){
+  const ev=await STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const meals=ev.catering||[];
   const days=getEventDays(ev);
@@ -2412,8 +2606,9 @@ function renderCatering(){
 }
 
 
-function openMealModal(id=null){
-  const ev=STORE.getEvent(currentEventId);
+
+async function openMealModal(id=null){
+  const ev=await STORE.getEvent(currentEventId);
   const days=getEventDays(ev);
   
   ['mlType','mlDay','mlTime','mlLieu','mlNotes','mlEditId'].forEach(f=>{
@@ -2449,8 +2644,8 @@ function openMealModal(id=null){
   openModal('modalMeal');
 }
 
-function renderMealPersonLists(selectedIds){
-  const ev=STORE.getEvent(currentEventId);
+async function renderMealPersonLists(selectedIds){
+  const ev=await STORE.getEvent(currentEventId);
   const all=ev.personnel||[];
   
   const makeItem=(p,toSel)=>`<div class="catering-person-item" onclick="toggleMealPerson('${p.id}',${toSel})">
@@ -2474,12 +2669,12 @@ function toggleMealPerson(pid,adding){
   renderMealPersonLists(sel);
 }
 
-function saveMeal(){
+async function saveMeal(){
   const type=document.getElementById('mlType').value;
   const day=document.getElementById('mlDay').value;
   if(!type||!day){ alert('Type et jour sont obligatoires.'); return; }
   
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   const editId=document.getElementById('mlEditId').value;
   
   const meal={
@@ -2500,24 +2695,24 @@ function saveMeal(){
     ev.catering.push(meal);
   }
   
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   closeModal('modalMeal');
   renderCatering();
 }
 
-function deleteMeal(id){
+async function deleteMeal(id){
   if(!confirm('Supprimer ce repas ?')) return;
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   ev.catering=(ev.catering||[]).filter(m=>m.id!==id);
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   renderCatering();
 }
 
 // =============================================
 // TAB: LOGEMENTS
 // =============================================
-function renderLogements(){
-  const ev=STORE.getEvent(currentEventId);
+async function renderLogements(){
+  const ev=await STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const logements=ev.logements||[];
   let html=`<div class="section-header"><div class="section-title">🏨 Logements</div><button class="btn btn-primary" onclick="openLogementModal()">＋ Ajouter un logement</button></div>`;
@@ -2556,8 +2751,8 @@ function renderLogements(){
   tc.innerHTML=html;
 }
 
-function openLogementModal(id=null){
-  const ev=STORE.getEvent(currentEventId);
+async function openLogementModal(id=null){
+  const ev=await STORE.getEvent(currentEventId);
   
   ['lgNom','lgAdresse','lgLits','lgParking','lgRecupCles','lgRemiseCles','lgPdj','lgNotes','lgEditId'].forEach(f=>{
     const el=document.getElementById(f);
@@ -2590,8 +2785,8 @@ function openLogementModal(id=null){
   openModal('modalLogement');
 }
 
-function renderLogementPersonLists(selectedIds) {
-  const ev = STORE.getEvent(currentEventId);
+async function renderLogementPersonLists(selectedIds) {
+  const ev = await STORE.getEvent(currentEventId);
   const allPersonnel = ev.personnel || [];
   const currentEditId = document.getElementById('lgEditId').value;
 
@@ -2638,11 +2833,11 @@ function toggleLogementPerson(pid,adding){
   renderLogementPersonLists(sel);
 }
 
-function saveLogement(){
+async function saveLogement(){
   const nom=document.getElementById('lgNom').value.trim();
   if(!nom){ alert('Le nom du logement est obligatoire.'); return; }
   
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   const editId=document.getElementById('lgEditId').value;
   
   const lg={
@@ -2666,16 +2861,16 @@ function saveLogement(){
     ev.logements.push(lg);
   }
   
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   closeModal('modalLogement');
   renderLogements();
 }
 
-function deleteLogement(id){
+async function deleteLogement(id){
   if(!confirm('Supprimer ce logement ?')) return;
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   ev.logements=(ev.logements||[]).filter(l=>l.id!==id);
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   renderLogements();
 }
 
@@ -2690,8 +2885,8 @@ function toggleLogementPerson(pid,adding){
 // =============================================
 // TAB: ACCÈS
 // =============================================
-function renderAcces(){
-  const ev=STORE.getEvent(currentEventId);
+async function renderAcces(){
+  const ev=await STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const vehicles=(ev.vehicles||[]);
   let html=`<div class="section-header"><div class="section-title">🚗 Accès véhicules</div><button class="btn btn-primary" onclick="openVehicleModal()">＋ Ajouter un véhicule</button></div>`;
@@ -2740,8 +2935,8 @@ function renderAcces(){
   tc.innerHTML=html;
 }
 
-function editSiteAcces(){
-  const ev=STORE.getEvent(currentEventId);
+async function editSiteAcces(){
+  const ev=await STORE.getEvent(currentEventId);
   document.getElementById('acAdresse').value=ev.acces.adresse||'';
   document.getElementById('acParking').value=ev.acces.parking||'';
   document.getElementById('acCodes').value=ev.acces.codes||'';
@@ -2750,8 +2945,8 @@ function editSiteAcces(){
   openModal('modalSiteAcces');
 }
 
-function saveSiteAcces(){
-  const ev=STORE.getEvent(currentEventId);
+async function saveSiteAcces(){
+  const ev=await STORE.getEvent(currentEventId);
   ev.acces={
     adresse:document.getElementById('acAdresse').value.trim(),
     parking:document.getElementById('acParking').value.trim(),
@@ -2759,13 +2954,13 @@ function saveSiteAcces(){
     methode:document.getElementById('acMethode').value.trim(),
     notes:document.getElementById('acNotes').value.trim()
   };
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   closeModal('modalSiteAcces');
   renderAcces();
 }
 
-function openVehicleModal(id = null) {
-  const ev = STORE.getEvent(currentEventId);
+async function openVehicleModal(id = null) {
+  const ev = await STORE.getEvent(currentEventId);
   const personnel = ev.personnel || [];
 
   // Reset des champs
@@ -2804,8 +2999,8 @@ function refreshPassengerLists() {
   renderVehiclePersonLists(sel);
 }
 
-function renderVehiclePersonLists(selectedIds) {
-  const ev = STORE.getEvent(currentEventId);
+async function renderVehiclePersonLists(selectedIds) {
+  const ev = await STORE.getEvent(currentEventId);
   const all = ev.personnel || [];
   const currentDriverId = document.getElementById('vhDriver').value;
 
@@ -2837,14 +3032,8 @@ function toggleVehiclePerson(pid, adding) {
   document.getElementById('vhPassengers').value = JSON.stringify(sel);
   renderVehiclePersonLists(sel);
 }
-function toggleVehiclePerson(pid,adding){
-  let sel=JSON.parse(document.getElementById('vhPassengers').value||'[]');
-  if(adding) sel.push(pid); else sel=sel.filter(id=>id!==pid);
-  document.getElementById('vhPassengers').value=JSON.stringify(sel);
-  renderVehiclePersonLists(sel);
-}
 
-function saveVehicle() {
+async function saveVehicle() {
   // Récupération des valeurs
   const plaque = document.getElementById('vhPlaque').value.trim();
   const type = document.getElementById('vhType').value;
@@ -2860,7 +3049,7 @@ function saveVehicle() {
     return;
   }
 
-  const ev = STORE.getEvent(currentEventId);
+  const ev = await STORE.getEvent(currentEventId);
   const editId = document.getElementById('vhEditId').value;
 
   const v = {
@@ -2881,17 +3070,17 @@ function saveVehicle() {
     ev.vehicles.push(v);
   }
 
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   closeModal('modalVehicle');
   renderAcces(); // Rafraîchit l'onglet Accès
 }
 
 
-function deleteVehicle(id){
+async function deleteVehicle(id){
   if(!confirm('Supprimer ce véhicule ?')) return;
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   ev.vehicles=(ev.vehicles||[]).filter(v=>v.id!==id);
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   renderAcces();
 }
 
@@ -2901,8 +3090,8 @@ function deleteVehicle(id){
 // =============================================
 // TAB: CONTACTS (Avec Urgences & Équipe auto)
 // =============================================
-function renderContacts() {
-  const ev = STORE.getEvent(currentEventId);
+async function renderContacts() {
+  const ev = await STORE.getEvent(currentEventId);
   const tc = document.getElementById('tabContent');
   const contacts = ev.contacts || [];
   const personnel = ev.personnel || [];
@@ -3019,11 +3208,11 @@ function filterContacts(){
   });
 }
 
-function openContactModal(id=null){
+async function openContactModal(id=null){
   ['ctPrenom','ctNom','ctTel','ctMail','ctRole','ctOrga','ctNotes','ctEditId'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('modalContactTitle').textContent=id?'Modifier le contact':'Ajouter un contact';
   if(id){
-    const ev=STORE.getEvent(currentEventId);
+    const ev=await STORE.getEvent(currentEventId);
     const c=(ev.contacts||[]).find(x=>x.id===id);
     if(c){
       document.getElementById('ctPrenom').value=c.prenom||'';
@@ -3039,11 +3228,11 @@ function openContactModal(id=null){
   openModal('modalContact');
 }
 
-function saveContact(){
+async function saveContact(){
   const nom=document.getElementById('ctNom').value.trim();
   const tel=document.getElementById('ctTel').value.trim();
   if(!nom||!tel){ alert('Nom et téléphone sont obligatoires.'); return; }
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   const editId=document.getElementById('ctEditId').value;
   const c={
     id:editId||uid(),
@@ -3061,24 +3250,24 @@ function saveContact(){
     ev.contacts=ev.contacts||[];
     ev.contacts.push(c);
   }
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   closeModal('modalContact');
   renderContacts();
 }
 
-function deleteContact(id){
+async function deleteContact(id){
   if(!confirm('Supprimer ce contact ?')) return;
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   ev.contacts=(ev.contacts||[]).filter(c=>c.id!==id);
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   renderContacts();
 }
 
 // =============================================
 // TAB: TRANSPORT
 // =============================================
-function renderTransport(){
-  const ev=STORE.getEvent(currentEventId);
+async function renderTransport(){
+  const ev=await STORE.getEvent(currentEventId);
   const tc=document.getElementById('tabContent');
   const transports=ev.transport||[];
   let html=`<div class="section-header"><div class="section-title">🚛 Transport du matériel</div><button class="btn btn-primary" onclick="openTransportModal()">＋ Ajouter un camion</button></div>`;
@@ -3123,11 +3312,11 @@ function renderTransport(){
   tc.innerHTML=html;
 }
 
-function openTransportModal(id=null){
+async function openTransportModal(id=null){
   ['trSociete','trPlaque','trType','trContenu','trChauffeur','trChauffeurTel','trLivraison','trRecup','trAcces','trNotes','trEditId'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('modalTransTitle').textContent=id?'Modifier le camion':'Ajouter un camion';
   if(id){
-    const ev=STORE.getEvent(currentEventId);
+    const ev=await STORE.getEvent(currentEventId);
     const t=(ev.transport||[]).find(x=>x.id===id);
     if(t){
       document.getElementById('trSociete').value=t.societe||'';
@@ -3146,11 +3335,11 @@ function openTransportModal(id=null){
   openModal('modalTransport');
 }
 
-function saveTransport(){
+async function saveTransport(){
   const societe=document.getElementById('trSociete').value.trim();
   const plaque=document.getElementById('trPlaque').value.trim().toUpperCase();
   if(!societe||!plaque){ alert('Société et plaque obligatoires.'); return; }
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   const editId=document.getElementById('trEditId').value;
   const t={
     id:editId||uid(),societe,plaque,
@@ -3170,16 +3359,16 @@ function saveTransport(){
     ev.transport=ev.transport||[];
     ev.transport.push(t);
   }
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   closeModal('modalTransport');
   renderTransport();
 }
 
-function deleteTransport(id){
+async function deleteTransport(id){
   if(!confirm('Supprimer ce camion ?')) return;
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   ev.transport=(ev.transport||[]).filter(t=>t.id!==id);
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   renderTransport();
 }
 
@@ -3194,8 +3383,8 @@ function showPublicTeam(eventId){
   renderPublicTeam();
 }
 
-function renderPublicTeam(){
-  const ev=STORE.getEvent(currentPublicEventId);
+async function renderPublicTeam(){
+  const ev=await STORE.getEvent(currentPublicEventId);
   if(!ev) return;
   const personnel=(ev.personnel||[]).sort((a,b)=>(a.nom+a.prenom).localeCompare(b.nom+b.prenom));
   const heroHtml=`
@@ -3235,9 +3424,9 @@ function renderPublicTeam(){
 // =============================================
 // PUBLIC VIEW: PERSONAL DASHBOARD
 // =============================================
-function showPublicDashboard(personId){
+async function showPublicDashboard(personId){
   currentPublicPersonId=personId;
-  const ev=STORE.getEvent(currentPublicEventId);
+  const ev=await STORE.getEvent(currentPublicEventId);
   const person=(ev.personnel||[]).find(p=>p.id===personId);
   if(!person) return;
   showView('viewDashboard');
@@ -3366,32 +3555,44 @@ function renderDashboard(person,ev){
 }
 
 // =============================================
-// SHARE LINK
+// SHARE LINK (TEMPS RÉEL FIREBASE)
 // =============================================
-function generateShareLink(eventId){
-  const baseUrl=window.location.href.split('?')[0].split('#')[0];
-  return `${baseUrl}?public=${eventId}`;
-}
 
-function openShareModal(eventId){
-  const link=generateShareLink(eventId);
-  document.getElementById('shareLinkText').textContent=link;
-  document.getElementById('shareLinkBox').dataset.link=link;
+async function openShareModal() {
+  const ev = await STORE.getEvent(currentEventId);
+  if (!ev) return;
+
+  // 1. Création du nouveau lien Cloud
+  const baseUrl = window.location.origin + window.location.pathname;
+  const shareUrl = `${baseUrl}#live=${ev.id}`;
+
+  // 2. On affiche le lien visuellement dans la case
+  const textEl = document.getElementById('shareLinkText');
+  const boxEl = document.getElementById('shareLinkBox');
+  if (textEl) textEl.textContent = shareUrl;
+  if (boxEl) boxEl.dataset.link = shareUrl;
+
+  // 3. On ouvre la fenêtre
   openModal('modalShare');
 }
 
-function copyShareLink(){
-  const link=document.getElementById('shareLinkBox').dataset.link;
-  navigator.clipboard.writeText(link).then(()=>{
-    alert('✅ Lien copié !');
-  });
+function copyShareLink() {
+  const link = document.getElementById('shareLinkBox').dataset.link;
+  if (link) {
+    navigator.clipboard.writeText(link).then(() => {
+      alert('✅ LIEN COPIÉ !\n\nEnvoie-le à tes techniciens via WhatsApp.\nLes modifications seront visibles en temps réel !');
+    }).catch(err => {
+      console.error(err);
+      alert('❌ Erreur lors de la copie manuelle.');
+    });
+  }
 }
 
 // =============================================
 // PERSONNEL CRUD
 // =============================================
-function openPersonnelModal(id=null){  // ← "nel" important !
-  const ev=STORE.getEvent(currentEventId);
+async function openPersonnelModal(id=null){  // ← "nel" important !
+  const ev=await STORE.getEvent(currentEventId);
   const days=getEventDays(ev);
   
   ['pPrenom','pNom','pTel','pMail','pMetier','pPoste','pAllergies','pNotes','pEditId'].forEach(f=>{
@@ -3446,7 +3647,7 @@ function togglePersonnelDay(el){
   el.classList.toggle('active');
 }
 
-function savePersonnel(){
+async function savePersonnel(){
   const prenom=document.getElementById('pPrenom').value.trim();
   const nom=document.getElementById('pNom').value.trim();
   const tel=document.getElementById('pTel').value.trim();
@@ -3456,7 +3657,7 @@ function savePersonnel(){
     return;
   }
   
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   const editId=document.getElementById('pEditId').value;
   const days=[...document.querySelectorAll('#pPlanningDays input[type="checkbox"]:checked')].map(c=>c.dataset.day);
   
@@ -3481,22 +3682,22 @@ function savePersonnel(){
     ev.personnel.push(person);
   }
   
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   closeModal('modalPersonnel');
   renderPersonnel();
 }
 
-function deletePersonnel(id){
+async function deletePersonnel(id){
   if(!confirm('Supprimer ce technicien ?')) return;
-  const ev=STORE.getEvent(currentEventId);
+  const ev=await STORE.getEvent(currentEventId);
   ev.personnel=(ev.personnel||[]).filter(p=>p.id!==id);
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   renderPersonnel();
 }
 
 // Auto-création des équipes par métier
-function autoCreateTeams(){
-  const ev=STORE.getEvent(currentEventId);
+async function autoCreateTeams(){
+  const ev=await STORE.getEvent(currentEventId);
   const personnel=ev.personnel||[];
   const metiers=[...new Set(personnel.map(p=>p.metier))];
   const existing=ev.equipes||[];
@@ -3520,12 +3721,12 @@ function autoCreateTeams(){
   });
   
   ev.equipes=existing.filter(t=>!t.auto||metiers.includes(t.metier));
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
 }
 
 // Fonction universelle de duplication
-function duplicateItem(category, id) {
-  const ev = STORE.getEvent(currentEventId);
+async function duplicateItem(category, id) {
+  const ev = await STORE.getEvent(currentEventId);
   if (!ev) return;
   
   // Note : pour le personnel, la clé dans l'objet ev est 'personnel', 
@@ -3553,31 +3754,28 @@ function duplicateItem(category, id) {
   }
 
   ev[category].push(copy);
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
 
   // Rafraîchissement automatique de l'onglet
   renderTab(currentTab);
 }
 
-function initSortable(category, containerId) {
+async function initSortable(category, containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
 
   Sortable.create(el, {
     animation: 150,
-    handle: '.drag-handle', // On glisse via une petite icône
-    onEnd: function (evt) {
-      const ev = STORE.getEvent(currentEventId);
+    handle: '.drag-handle',
+    onEnd: async function (evt) { // <--- AJOUT DU MOT-CLÉ async ICI
+      const ev = await STORE.getEvent(currentEventId);
       if (!ev || !ev[category]) return;
 
-      // On réorganise le tableau dans le STORE selon le nouvel ordre visuel
       const items = ev[category];
       const [movedItem] = items.splice(evt.oldIndex, 1);
       items.splice(evt.newIndex, 0, movedItem);
 
-      STORE.saveEvent(ev);
-      // Optionnel : renderTab(currentTab); 
-      // On ne rafraîchit pas forcément pour éviter les clignotements
+      await STORE.saveEvent(ev);
     },
   });
 }
@@ -3585,83 +3783,59 @@ function initSortable(category, containerId) {
 // =============================================
 // SUPPRIMER UNE TÂCHE DU PLANNING
 // =============================================
-function deleteTask(id) {
+async function deleteTask(id) {
   if (!confirm('Es-tu sûr de vouloir supprimer cette tâche ?')) return;
   
-  const ev = STORE.getEvent(currentEventId);
+  const ev = await STORE.getEvent(currentEventId);
   if (!ev) return;
   
   // On filtre pour garder toutes les tâches SAUF celle qu'on veut supprimer
   ev.planning = (ev.planning || []).filter(t => t.id !== id);
   
-  STORE.saveEvent(ev);
+  await STORE.saveEvent(ev);
   renderPlanning();
 }
 
 // =============================================
-// LOGIQUE CLOUD - LIEN UNIQUE (JSONBIN)
+// LOGIQUE CLOUD - LIEN UNIQUE DIRECT FIREBASE
 // =============================================
 
-const JSONBIN_API_KEY = "$2a$10$B.kGrFFzC75O9OvY6UxDR.TTBqO34YBni3C.uUJNo86hFVCOkmVhe";
+function generateShareLink(e) { 
+  if (!currentEventId) return;
+  
+  const baseUrl = window.location.origin + window.location.pathname;
+  const shareUrl = `${baseUrl}#live=${currentEventId}`;
+  
+  // CORRECTION : On met à jour TOUS les textes (Onglet Infos + Modale)
+  document.querySelectorAll('#shareLinkText').forEach(el => {
+    el.textContent = shareUrl;
+  });
+  
+  const boxEl = document.getElementById('shareLinkBox');
+  if (boxEl) boxEl.dataset.link = shareUrl;
 
-// 1. GÉNÉRER OU METTRE À JOUR LE LIEN (Côté Admin)
-async function generateShareLink() {
-  const ev = STORE.getEvent(currentEventId);
-  if (!ev) return;
+  openModal('modalShare');
+}
 
-  // Animation du bouton
-  const btn = event.currentTarget;
-  const originalText = btn.innerHTML;
-  btn.innerHTML = "⏳ Synchronisation Cloud...";
-  btn.disabled = true;
-
-  try {
-    const binId = ev.cloudId;
-    let url = 'https://api.jsonbin.io/v3/b';
-    let method = 'POST';
-
-    if (binId) {
-      url = `https://api.jsonbin.io/v3/b/${binId}`;
-      method = 'PUT';
-    }
-
-    const response = await fetch(url, {
-      method: method,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': '$2a$10$B.kGrFFzC75O9OvY6UxDR.TTBqO34YBni3C.uUJNo86hFVCOkmVhe',
-        'X-Bin-Private': 'false' // Très important : rend le lien accessible sans clé pour les techs
-      },
-      body: JSON.stringify(ev)
+function copyShareLink() {
+  const link = document.getElementById('shareLinkBox').dataset.link;
+  if (link) {
+    navigator.clipboard.writeText(link).then(() => {
+      alert('✅ LIEN COPIÉ !\n\nEnvoie-le à tes techniciens via WhatsApp.\nLes modifications seront visibles en temps réel !');
+    }).catch(err => {
+      console.error(err);
+      alert('❌ Erreur lors de la copie manuelle.');
     });
-
-    const result = await response.json();
-    
-    if (response.ok) {
-      const newBinId = binId || result.metadata.id;
-      ev.cloudId = newBinId;
-      STORE.saveEvent(ev);
-
-      // Création du lien Internet
-      const baseUrl = window.location.origin + window.location.pathname;
-      const shareUrl = `${baseUrl}#live=${newBinId}`;
-
-      await navigator.clipboard.writeText(shareUrl);
-      alert("✅ SYNCHRONISATION RÉUSSIE !\n\nLe lien internet a été copié dans ton presse-papier.\n\nEnvoie-le à tes techniciens via WhatsApp.");
-    } else {
-      throw new Error("Erreur serveur JSONBin");
-    }
-  } catch (e) {
-    console.error(e);
-    alert("❌ Erreur de connexion au Cloud. Vérifie ta connexion internet.");
-  } finally {
-    btn.innerHTML = originalText;
-    btn.disabled = false;
   }
 }
 
+
+
 // 3. AFFICHAGE DU PORTAIL (Liste des noms)
-function renderTechPortal(ev) {
+function renderTechPortal() {
+  const ev = window.PUBLIC_EV; // On récupère les données en direct !
+  if (!ev) return;
+
   document.body.style.background = "#0F0E17";
   document.body.innerHTML = `
     <div style="max-width: 500px; margin: 0 auto; padding: 30px 20px; font-family: 'Inter', sans-serif; color: #F8F8FF;">
@@ -3672,16 +3846,17 @@ function renderTechPortal(ev) {
       </header>
       <div style="display: grid; gap: 12px;">
         ${(ev.personnel || []).sort((a,b) => a.prenom.localeCompare(b.prenom)).map(p => `
-          <button onclick='renderTechDetail("${p.id}", ${JSON.stringify(ev).replace(/'/g, "&apos;")})' 
-            style="width: 100%; padding: 18px; border: 1px solid #2D2B45; background: #1A1928; color: white; border-radius: 12px; text-align: left; font-size: 1.1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+          <button onclick="renderTechDetail('${p.id}')" 
+            style="width: 100%; padding: 18px; border: 1px solid #2D2B45; background: #1A1928; color: white; border-radius: 12px; text-align: left; font-size: 1.1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s;">
             <span><strong>${p.prenom}</strong> ${p.nom.toUpperCase()}</span>
-            <span style="font-size: 0.75rem; background: #4F46E5; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; font-weight: 700;">${p.metier}</span>
+            <span style="font-size: 0.75rem; background: ${PUB_COLORS[p.metier] || '#4F46E5'}; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; font-weight: 700;">${p.metier}</span>
           </button>
         `).join('')}
       </div>
     </div>
   `;
 }
+
 
 // =============================================
 // PUBLIC VIEW: CONFIGURATION & DASHBOARD
@@ -3693,32 +3868,62 @@ const PUB_COLORS = { lumiere:'#F59E0B', son:'#3B82F6', video:'#8B5CF6', structur
 const PUB_POSTES = { regisseur:'Régisseur', technicien:'Technicien', assistant:'Assistant', road:'Road', 'chef-chantier':'Chef de chantier' };
 const PUB_METIERS = { lumiere:'💡 Lumière', son:'🔊 Son', video:'📹 Vidéo', structure:'🏗️ Structure', block:'🚧 Block', road:'🛣️ Road' };
 
-// 1. DÉTECTION DU MODE LIVE (Lien partagé)
-window.addEventListener('load', async () => {
-  const hash = window.location.hash;
-  if (hash.startsWith('#live=')) {
-    const binId = hash.replace('#live=', '');
-    
-    document.body.innerHTML = `
-      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#0F0E17; color:white; font-family:sans-serif;">
-        <div style="font-size:3rem; margin-bottom:20px; animation: pulse 1.5s infinite;">⚡</div>
-        <div style="letter-spacing:2px; font-weight:bold;">CHARGEMENT EVENTFLOW...</div>
-      </div>
-      <style>@keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }</style>`;
+// =============================================
+// INIT GLOBAL & TEMPS RÉEL
+// =============================================
 
-    try {
-      const response = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
-        headers: { 'X-Master-Key': JSONBIN_API_KEY }
-      });
-      const result = await response.json();
-      if (response.ok) {
-        window.PUBLIC_EV = result.record;
-        if(document.getElementById('mainNav')) document.getElementById('mainNav').style.display = 'none';
+// 1. FONCTION DE CHARGEMENT DU PORTAIL TECHNICIEN EN TEMPS RÉEL
+function initPublicPortal(eventId) {
+  document.body.innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#0F0E17; color:white; font-family:sans-serif;">
+      <div style="font-size:3rem; margin-bottom:20px; animation: pulse 1.5s infinite;">⚡</div>
+      <div style="letter-spacing:2px; font-weight:bold;">CHARGEMENT LIVE...</div>
+    </div>
+    <style>@keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }</style>`;
+
+  // 🔥 LA MAGIE DU TEMPS RÉEL EST ICI : onSnapshot
+  db.collection('events').doc(eventId).onSnapshot(doc => {
+    if (doc.exists) {
+      window.PUBLIC_EV = { id: doc.id, ...doc.data() };
+      
+      if(document.getElementById('mainNav')) document.getElementById('mainNav').style.display = 'none';
+      
+      // Si le technicien est DÉJÀ sur son dashboard, on le rafraîchit en direct !
+      if (typeof currentPublicPersonId !== 'undefined' && currentPublicPersonId !== null) {
+        renderTechDetail(currentPublicPersonId);
+      } else {
+        // Sinon, on affiche l'écran de choix du nom
         renderTechPortal();
       }
-    } catch (e) {
-      document.body.innerHTML = `<div style="padding:50px; text-align:center; color:white; background:#0F0E17; height:100vh;"><h2>❌ Erreur</h2><p>Lien expiré ou problème réseau.</p></div>`;
+    } else {
+      document.body.innerHTML = `<div style="padding:50px; text-align:center; color:white; background:#0F0E17; height:100vh;"><h2>❌ Chantier Introuvable</h2></div>`;
     }
+  }, error => {
+    console.error(error);
+    document.body.innerHTML = `<div style="padding:50px; text-align:center; color:white; background:#0F0E17; height:100vh;"><h2>❌ Erreur de connexion</h2></div>`;
+  });
+}
+
+// 2. LANCEMENT DU LOGICIEL (ADMIN OU TECHNICIEN)
+window.addEventListener('load', () => {
+  const hash = window.location.hash;
+  
+  if (hash.startsWith('#live=')) {
+    // 👤 On ouvre le mode Technicien (Lien)
+    const eventId = hash.replace('#live=', '');
+    initPublicPortal(eventId);
+  } else {
+    // 👑 On ouvre le mode Administrateur
+    STORE.loadAllEvents(() => {
+      // Rafraîchissement automatique si un autre Admin modifie un truc
+      if (currentEventId && document.getElementById('viewEvent').classList.contains('active')) {
+        renderEventHeader();
+        renderTab(currentTab);
+      } else if (document.getElementById('viewHome').classList.contains('active')) {
+        renderHome();
+      }
+    });
+    showHome();
   }
 });
 
@@ -3732,11 +3937,6 @@ function renderTechPortal() {
         <div style="font-size: 2.5rem; margin-bottom: 15px;">⚡</div>
         <h1 style="font-size: 1.8rem; margin-bottom: 8px;">${ev.name}</h1>
         <p style="color: #A9A6C3;">Portail Équipe - Choisis ton nom :</p>
- <!-- BOUTON PRODUCTION -->
-        <button onclick="renderProductionDashboard()" style="margin-top:20px; width:100%; padding:15px; background:var(--gradient, #4F46E5); border:none; border-radius:12px; color:white; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; box-shadow: 0 4px 15px rgba(79,70,229,0.3);">
-          📊 ESPACE PRODUCTION (LOGISTIQUE)
-        </button>
-     
       </header>
       <div style="display: grid; gap: 12px;">
         ${(ev.personnel || []).sort((a,b) => a.prenom.localeCompare(b.prenom)).map(p => `
@@ -3752,10 +3952,33 @@ function renderTechPortal() {
 }
 
 // 3. DASHBOARD : DÉTAIL D'UN TECHNICIEN
-// =============================================
-// PUBLIC VIEW: PERSONAL DASHBOARD (VERSION PRO)
-// =============================================
+// GÉNÉRATION DES BLOCS PLANNING (PAR JOUR)
+// ----------------------------------------------------
+function generatePublicPlanningHtml(myTasks, ev) {
+  const days = getEventDays(ev);
+  if (!myTasks.length) return '<div style="color:#6B6890; font-size:0.8rem;">Aucune tâche assignée.</div>';
 
+  return days.map(day => {
+    const dayTasks = myTasks.filter(t => t.day === day).sort((a,b) => a.timeStart.localeCompare(b.timeStart));
+    if (!dayTasks.length) return '';
+
+    return `
+      <div style="min-width:220px; background:#1A1928; border:1px solid #2D2B45; border-radius:12px; overflow:hidden; flex-shrink:0;">
+        <div style="background:#252438; padding:8px; text-align:center; font-size:0.75rem; font-weight:bold; border-bottom:1px solid #2D2B45; color:#4F46E5;">
+          ${formatDateShort(day)}
+        </div>
+        <div style="padding:10px; display:flex; flex-direction:column; gap:8px;">
+          ${dayTasks.map(t => `
+            <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:3px solid ${t.color}; border-radius:6px; padding:10px; cursor:pointer;">
+              <div style="font-size:0.7rem; font-weight:bold; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
+              <div style="font-size:0.85rem; font-weight:700; margin-top:2px;">${t.title}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
 // =============================================
 // PUBLIC VIEW: PERSONAL DASHBOARD (VERSION COMPLÈTE)
@@ -4011,289 +4234,58 @@ function generatePublicCateringHtml(myMeals, ev) {
 }
 
 
-// ----------------------------------------------------
-// GÉNÉRATION DES BLOCS PLANNING (PAR JOUR) - VERSION CORRIGÉE
-// ----------------------------------------------------
-// ----------------------------------------------------
-// GÉNÉRATION DES BLOCS PLANNING (PAR JOUR) - FIX OVERNIGHT
-// ----------------------------------------------------
+// 4. PLANNING VISUEL MOBILE
 function generatePublicPlanningHtml(myTasks, ev) {
   const days = getEventDays(ev);
-  if (!myTasks || !myTasks.length) return '<div style="color:#6B6890; font-size:0.8rem; padding:10px;">Aucune tâche assignée.</div>';
-
-  // Fonction utilitaire pour transformer l'heure en minutes de production (06h -> 30h)
-  const toProdMin = (tStr) => {
-    if(!tStr) return 0;
-    const [h, m] = tStr.split(':').map(Number);
-    // Si l'heure est entre 00:00 et 05:59, on ajoute 24h
-    const adjustedH = (h < 6) ? h + 24 : h;
-    return adjustedH * 60 + m;
-  };
+  if (!myTasks.length) return `<div style="color:#6B6890; padding:20px;">Aucune tâche assignée.</div>`;
 
   return days.map(day => {
     const dayTasks = myTasks.filter(t => t.day === day);
     if (!dayTasks.length) return '';
 
-    // 1. Tri des tâches avec la logique "Production" (01:00 passe après 23:00)
-    const sortedTasks = [...dayTasks].sort((a, b) => toProdMin(a.timeStart) - toProdMin(b.timeStart));
-    
-    // 2. Trouver la tâche qui finit le plus tard (avec la même logique)
-    const lastTask = [...dayTasks].sort((a, b) => toProdMin(b.timeEnd) - toProdMin(a.timeEnd))[0];
-
-    const startTime = sortedTasks[0].timeStart;
-    const endTime = lastTask.timeEnd;
-    const totalDayRange = `${startTime} - ${endTime}`;
-
     return `
-      <div style="min-width:220px; background:#1A1928; border:1px solid #2D2B45; border-radius:12px; overflow:hidden; flex-shrink:0;">
-        <div style="background:#252438; padding:10px; text-align:center; border-bottom:1px solid #4F46E5; display:flex; flex-direction:column; gap:2px;">
-          <div style="font-size:0.7rem; font-weight:700; color:#A9A6C3; text-transform:uppercase;">${formatDateShort(day)}</div>
-          <div style="font-size:1rem; font-weight:900; color:white; letter-spacing:0.5px;">⏱️ ${totalDayRange}</div>
+      <div style="min-width: 260px; flex-shrink: 0; background: #1A1928; border-radius: 12px; border: 1px solid #2D2B45; overflow: hidden;">
+        <div style="background: #252438; padding: 12px; text-align: center; border-bottom: 1px solid #2D2B45;">
+          <div style="font-weight: bold; font-size: 1rem;">${formatDateShort(day)}</div>
         </div>
-        <div style="padding:10px; display:flex; flex-direction:column; gap:8px;">
-          ${sortedTasks.map(t => `
-            <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:3px solid ${t.color}; border-radius:6px; padding:10px; cursor:pointer;">
-              <div style="font-size:0.7rem; font-weight:bold; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
-              <div style="font-size:0.85rem; font-weight:700; margin-top:2px;">${t.title}</div>
+        <div style="padding: 10px; display:flex; flex-direction:column; gap:8px;">
+          ${dayTasks.sort((a,b) => a.timeStart.localeCompare(b.timeStart)).map(t => `
+            <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:4px solid ${t.color}; padding:10px; border-radius:4px; cursor:pointer;">
+              <div style="font-size:0.75rem; font-weight:800; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
+              <div style="font-weight:700; font-size:0.9rem; margin-top:2px;">${t.title}</div>
             </div>
           `).join('')}
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
 }
 
+async function confirmDeleteTask() {
+  const editId = document.getElementById('tkEditId').value;
+  if (!editId) return;
 
-function renderProductionDashboard() {
-  const ev = window.PUBLIC_EV;
-  const days = getEventDays(ev);
+  if (!confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) return;
+
+  const ev = await STORE.getEvent(currentEventId);
+  // On filtre le tableau pour retirer la tâche
+  ev.planning = (ev.planning || []).filter(t => t.id !== editId);
   
-  // Utilitaire pour le tri chronologique pro (gestion de la nuit)
-  const toProdMin = (tStr) => {
-    if(!tStr) return 0;
-    const [h, m] = tStr.split(':').map(Number);
-    const adjustedH = (h < 6) ? h + 24 : h;
-    return adjustedH * 60 + m;
-  };
-
-  document.body.innerHTML = `
-    <style>
-      :root { --bg: #0B0A10; --card: #161521; --border: #2D2B45; --accent: #4F46E5; --text: #F8F8FF; --text-soft: #A9A6C3; --danger: #EF4444; }
-      body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
-      .prod-container { max-width: 1600px; margin: 0 auto; padding: 20px; }
-      .section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 25px; overflow: hidden; }
-      .section-h { background: rgba(255,255,255,0.03); padding: 15px 20px; border-bottom: 1px solid var(--border); font-weight: 800; font-size: 0.85rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; }
-      table { width: 100%; border-collapse: collapse; }
-      th { text-align: left; padding: 12px 15px; font-size: 0.7rem; color: var(--text-soft); border-bottom: 2px solid var(--border); text-transform: uppercase; }
-      td { padding: 12px 15px; border-bottom: 1px solid var(--border); font-size: 0.85rem; vertical-align: top; border-right: 1px solid rgba(255,255,255,0.03); }
-      .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; background: var(--border); color: var(--text); }
-      .sticky-header { position: sticky; top: 0; background: var(--bg); z-index: 100; padding: 15px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-      .allergy-alert { color: var(--danger); font-weight: 800; font-size: 0.75rem; display: block; margin-top: 2px; }
-    </style>
-
-    <div class="prod-container">
-      <div class="sticky-header">
-        <div>
-          <h1 style="margin:0; font-size:1.4rem;">📊 MASTER LOGISTIQUE : ${ev.name}</h1>
-          <div style="color:var(--text-soft); font-size:0.9rem;">${ev.lieu || 'Lieu NC'} | Vue Production Desktop</div>
-        </div>
-        <button onclick="location.reload()" style="background:var(--accent); color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">← RETOUR PORTAIL</button>
-      </div>
-
-      <!-- 1. PLANNING GÉNÉRAL (Synchronisé sur ev.planning) -->
-      <div class="section">
-        <div class="section-h">📅 PLANNING GÉNÉRAL DES OPÉRATIONS</div>
-        ${days.map(day => {
-          const dayTasks = (ev.planning || []).filter(t => t.day === day).sort((a,b) => toProdMin(a.timeStart) - toProdMin(b.timeStart));
-          if(dayTasks.length === 0) return '';
-          return `
-            <div style="background: #1F1D2E; padding: 10px 20px; font-weight: 800; color: #FFF; font-size: 0.85rem; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between;">
-              <span>${formatDate(day).toUpperCase()}</span>
-              <span style="color:var(--accent)">${dayTasks.length} Tâches</span>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:140px;">Horaires</th>
-                  <th style="width:300px;">Activité</th>
-                  <th style="width:300px;">Personnel</th>
-                  <th>Notes & Instructions</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${dayTasks.map(t => {
-                  const assigned = (ev.personnel || []).filter(p => (t.persons || []).includes(p.id));
-                  return `
-                    <tr>
-                      <td style="font-weight:700; color:var(--accent);">${t.timeStart} — ${t.timeEnd}</td>
-                      <td style="font-weight:700;"><span style="border-left: 4px solid ${t.color || '#4F46E5'}; padding-left: 10px;">${t.title}</span></td>
-                      <td>${assigned.map(a => `<span class="badge" style="margin:2px;">${a.prenom}</span>`).join('')}</td>
-                      <td style="font-size:0.8rem; color:var(--text-soft); line-height:1.4;">${t.notes || '-'}</td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
-          `;
-        }).join('')}
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-        
-        <!-- 2. LOGEMENTS (Synchronisé sur lgArrival / lgDepart) -->
-        <div class="section">
-          <div class="section-h">🏨 LOGEMENTS & OCCUPANTS</div>
-          <table>
-            <thead>
-              <tr>
-                <th>Hôtel / Lieu</th>
-                <th>Dates</th>
-                <th>Occupants</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(ev.logements || []).length > 0 ? ev.logements.map(l => {
-                const occupants = (l.persons || []).map(pObj => {
-                    const p = ev.personnel.find(x => x.id === (pObj.id || pObj));
-                    return p ? p.prenom : 'NC';
-                }).join(', ');
-                return `
-                  <tr>
-                    <td><div style="font-weight:700;">${l.nom}</div><div style="font-size:0.7rem; color:var(--text-soft);">${l.adresse || ''}</div></td>
-                    <td style="white-space:nowrap;">
-                        <span class="badge">In: ${formatDateShort(l.lgArrival)}</span><br>
-                        <span class="badge" style="margin-top:4px;">Out: ${formatDateShort(l.lgDepart)}</span>
-                    </td>
-                    <td style="font-size:0.8rem;">${occupants || '—'}</td>
-                  </tr>
-                `;
-              }).join('') : '<tr><td colspan="3" style="text-align:center; padding:30px; color:var(--text-soft);">Aucun logement enregistré</td></tr>'}
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 3. VÉHICULES (Synchronisé sur ev.vehicles) -->
-        <div class="section">
-          <div class="section-h">🚗 FLOTTE VÉHICULES (ACCÈS)</div>
-          <table>
-            <thead>
-              <tr>
-                <th>Véhicule</th>
-                <th>Plaque</th>
-                <th>Chauffeur & Passagers</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(ev.vehicles || []).length > 0 ? ev.vehicles.map(v => {
-                const driver = ev.personnel.find(p => p.id === v.driver);
-                const passengers = (v.passengers || []).map(pid => ev.personnel.find(x => x.id === pid)?.prenom).filter(Boolean).join(', ');
-                return `
-                  <tr>
-                    <td><div style="font-weight:700;">${v.modele}</div><div style="font-size:0.7rem; color:var(--text-soft);">${v.type || ''}</div></td>
-                    <td><code style="background:#000; padding:4px 8px; border-radius:4px; font-weight:bold; color:var(--accent); border:1px solid var(--border);">${v.plaque || 'NC'}</code></td>
-                    <td style="font-size:0.8rem;">
-                        <strong>Cond: ${driver ? driver.prenom : 'NC'}</strong><br>
-                        <span style="color:var(--text-soft);">Pass: ${passengers || 'Seul'}</span>
-                    </td>
-                  </tr>
-                `;
-              }).join('') : '<tr><td colspan="3" style="text-align:center; padding:30px; color:var(--text-soft);">Aucun véhicule enregistré</td></tr>'}
-            </tbody>
-          </table>
-        </div>
-
-      </div>
-
-      <!-- 4. TRANSPORT MATÉRIEL (Synchronisé sur ev.transport) -->
-      <div class="section" style="margin-top:25px;">
-        <div class="section-h">🚛 TRANSPORT MATÉRIEL (CAMIONS)</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Société / Plaque</th>
-              <th>Contenu</th>
-              <th>Chauffeur</th>
-              <th>Livraison</th>
-              <th>Récupération</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${(ev.transport || []).length > 0 ? ev.transport.map(t => `
-              <tr>
-                <td><div style="font-weight:700;">${t.societe}</div><div style="font-size:0.7rem; color:var(--text-soft);">${t.plaque || ''}</div></td>
-                <td>${t.contenu || '-'}</td>
-                <td><div>${t.chauffeur || 'NC'}</div><div style="font-size:0.75rem; font-family:monospace;">${t.chauffeur_tel || ''}</div></td>
-                <td><span class="badge" style="background:var(--success)22; color:var(--success);">${formatDateTime(t.livraison)}</span></td>
-                <td><span class="badge" style="background:var(--danger)22; color:var(--danger);">${formatDateTime(t.recup)}</span></td>
-              </tr>
-            `).join('') : '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-soft);">Aucun transport matériel enregistré</td></tr>'}
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 5. CATERING & ALLERGIES -->
-      <div class="section">
-        <div class="section-h">🍽️ RÉCAPITULATIF CATERING & ALLERGIES</div>
-        <table>
-          <thead>
-            <tr>
-              <th>Jour</th>
-              <th>Repas</th>
-              <th>Heure</th>
-              <th>Nb</th>
-              <th>Détails & Allergies</th>
-            </tr>
-          </thead>
-          <tbody>
-             ${days.map(day => {
-              const dayMeals = (ev.catering || []).filter(m => m.day === day);
-              if (dayMeals.length === 0) return '';
-              return dayMeals.map(m => {
-                const people = (m.persons || []).map(pid => {
-                  const p = (ev.personnel || []).find(x => x.id === pid);
-                  if(!p) return '';
-                  // Alerte visuelle si allergie
-                  return p.allergies 
-                    ? `<span class="allergy-alert">${p.prenom} (⚠️ ${p.allergies})</span>` 
-                    : `<span>${p.prenom}</span>`;
-                }).filter(n => n).join(', ');
-                
-                return `
-                  <tr>
-                    <td style="font-weight:bold;">${formatDateShort(day)}</td>
-                    <td><span class="badge" style="background:var(--accent);">${m.type.toUpperCase()}</span></td>
-                    <td style="font-weight:700;">${m.time || '--:--'}</td>
-                    <td><b style="color:var(--accent); font-size:1rem;">${m.persons?.length || 0}</b></td>
-                    <td style="font-size:0.8rem; line-height:1.4;">${people || '<span style="color:var(--text-soft)">Aucun convive assigné</span>'}</td>
-                  </tr>
-                `;
-              }).join('');
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-
-      <!-- 6. NOTES GÉNÉRALES DE PROD -->
-      <div class="section">
-        <div class="section-h">📝 NOTES GÉNÉRALES DE PRODUCTION</div>
-        <div style="padding:25px; white-space: pre-wrap; font-size:0.95rem; line-height:1.6; color:var(--text-soft); background: rgba(255,255,255,0.01);">
-          ${ev.notes || 'Aucune note générale enregistrée pour cet événement.'}
-        </div>
-      </div>
-
-      <div style="text-align:center; padding:40px; color:var(--text-soft); font-size:0.8rem; opacity:0.5;">
-        EVENTFLOW PRO DASHBOARD — Document généré en temps réel le ${new Date().toLocaleDateString()}
-      </div>
-    </div>
-  `;
+  await STORE.saveEvent(ev);
+  closeModal('modalTask');
+  renderPlanning();
 }
 
+
+
+// =============================================
 // =============================================
 // INIT
 // =============================================
-window.addEventListener('load',()=>{
-  const params=new URLSearchParams(window.location.search);
-  if(params.has('public')){
+window.addEventListener('load', async () => {
+  await STORE.loadAllEvents(); 
+  
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('public')) {
     showPublicTeam(params.get('public'));
   } else {
     showHome();
