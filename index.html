@@ -1266,17 +1266,40 @@ function getEventStatus(ev){
 // =============================================
 // NAVIGATION
 // =============================================
-function showView(id){
-  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+function showView(id) {
+  // 1. On cherche l'élément
+  const target = document.getElementById(id);
+  
+  // 2. Si l'élément n'existe pas, on arrête tout pour éviter le crash
+  if (!target) {
+    console.warn(`La vue "${id}" n'existe pas dans cette page.`);
+    return;
+  }
+
+  // 3. Sinon, on continue normalement
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  target.classList.add('active');
 }
 
-function showHome(){
-  currentEventId=null;
+function showHome() {
+  // 🛡️ PARE-FEU : Si on est en mode technicien (hash), on sort immédiatement
+  if (window.location.hash.startsWith('#live=')) {
+    console.log("Mode Technicien détecté : showHome bloqué.");
+    return; 
+  }
+
+  // Si on n'est pas en mode live, on continue normalement :
+  const viewHome = document.getElementById('viewHome');
+  if (!viewHome) {
+    console.warn("La vue viewHome n'existe pas.");
+    return;
+  }
+  
+  // Le reste de ta fonction showHome habituelle...
   showView('viewHome');
   renderHome();
-  document.getElementById('mainNav').style.display='flex';
 }
+
 
 function showEvent(id){
   currentEventId=id;
@@ -2035,30 +2058,53 @@ function toggleTeamMember(personId,adding){
   renderTeamMemberLists(sel);
 }
 
-async function saveTeam(){
-  const name=document.getElementById('tName').value.trim();
-  if(!name){ alert('Le nom de l\'équipe est obligatoire.'); return; }
-  const ev=await STORE.getEvent(currentEventId);
-  const editId=document.getElementById('tEditId').value;
-  const team={
-    id:editId||uid(),
+async function saveTeam() {
+  const name = document.getElementById('tName').value.trim();
+  if (!name) { alert('Le nom de l\'équipe est obligatoire.'); return; }
+  
+  const ev = await STORE.getEvent(currentEventId);
+  const editId = document.getElementById('tEditId').value;
+  
+  const team = {
+    id: editId || uid(),
     name,
-    metier:document.getElementById('tMetier').value,
-    color:document.getElementById('tColor').value,
-    members:JSON.parse(document.getElementById('tSelectedMembers').value||'[]'),
-    auto:false
+    metier: document.getElementById('tMetier').value,
+    color: document.getElementById('tColor').value,
+    members: JSON.parse(document.getElementById('tSelectedMembers').value || '[]'),
+    auto: false
   };
-  if(editId){
-    const i=(ev.equipes||[]).findIndex(t=>t.id===editId);
-    if(i>=0) ev.equipes[i]=team;
+
+  // 1. Sauvegarde de l'équipe dans le tableau
+  if (editId) {
+    const i = (ev.equipes || []).findIndex(t => t.id === editId);
+    if (i >= 0) ev.equipes[i] = team;
   } else {
-    ev.equipes=ev.equipes||[];
+    ev.equipes = ev.equipes || [];
     ev.equipes.push(team);
   }
+
+  // 2. SYNCHRONISATION : On met à jour les tâches qui utilisent cette équipe
+  if (ev.planning) {
+    ev.planning.forEach(task => {
+      // Si la tâche utilise cette équipe
+      if (task.teams && task.teams.includes(team.id)) {
+        // On reconstruit la liste des personnes assignées à la tâche
+        // en récupérant les membres actuels de l'équipe modifiée
+        task.persons = team.members;
+      }
+    });
+  }
+
+  // 3. Sauvegarde finale
   await STORE.saveEvent(ev);
+  
   closeModal('modalTeam');
   renderEquipes();
+  
+  // Si le planning est affiché, on le rafraîchit
+  if (typeof renderPlanning === 'function') renderPlanning();
 }
+
 
 async function deleteTeam(id){
   if(!confirm('Supprimer cette équipe ?')) return;
@@ -2093,7 +2139,7 @@ async function renderPlanning() {
     return;
   }
 
-  const HOUR_H = 60; 
+  const HOUR_H = 100; 
   const HEADER_OFFSET = 38; // 📏 Espace pour le titre de la colonne (Lumière, Son...)
 
   let html = `
@@ -3384,42 +3430,56 @@ function showPublicTeam(eventId){
 }
 
 async function renderPublicTeam(){
-  const ev=await STORE.getEvent(currentPublicEventId);
-  if(!ev) return;
-  const personnel=(ev.personnel||[]).sort((a,b)=>(a.nom+a.prenom).localeCompare(b.nom+b.prenom));
-  const heroHtml=`
+const ev = window.PUBLIC_EV || (await STORE.getEvent(currentPublicEventId));
+  
+  if(!ev) {
+    console.error("Impossible de charger les données de l'événement.");
+    return;
+  }
+  const personnel = (ev.personnel||[]).sort((a,b) => (a.nom+a.prenom).localeCompare(b.nom+b.prenom));
+  
+  const heroHtml = `
     <div class="pub-hero-content">
       <div>
         <h1 style="font-size:2.5rem;margin-bottom:8px">${ev.name}</h1>
         <p style="font-size:1.1rem;color:var(--text-soft)">📍 ${ev.lieu||'—'} · 📅 ${formatDate(ev.dateStart)} → ${formatDate(ev.dateEnd)}</p>
+        
+        <!-- BOUTON PRODUCTION AJOUTÉ ICI -->
+        <button onclick="renderProductionDashboard()" style="margin-top:15px; padding:12px 24px; background:#4F46E5; color:white; border:none; border-radius:10px; font-weight:800; cursor:pointer; font-family:inherit; box-shadow: 0 4px 15px rgba(79,70,229,0.3);">
+          📊 ESPACE PRODUCTION (DESKTOP)
+        </button>
       </div>
       <div style="font-size:3rem">🎪</div>
     </div>`;
-  document.getElementById('pubHero').innerHTML=heroHtml;
-  const groupedByMetier={};
-  personnel.forEach(p=>{
-    if(!groupedByMetier[p.metier]) groupedByMetier[p.metier]=[];
+    
+  document.getElementById('pubHero').innerHTML = heroHtml;
+
+  const groupedByMetier = {};
+  personnel.forEach(p => {
+    if(!groupedByMetier[p.metier]) groupedByMetier[p.metier] = [];
     groupedByMetier[p.metier].push(p);
   });
-  let teamHtml=`<div class="pub-team-container"><div style="margin-bottom:40px">`;
-  Object.entries(groupedByMetier).forEach(([m,ps])=>{
-    teamHtml+=`<div class="pub-team-section">
+
+  let teamHtml = `<div class="pub-team-container"><div style="margin-bottom:40px">`;
+  Object.entries(groupedByMetier).forEach(([m, ps]) => {
+    teamHtml += `<div class="pub-team-section">
       <h2 style="color:${METIER_COLORS[m]};margin-bottom:20px">
         ${METIER_LABELS[m]||m} <span style="color:var(--text-muted);font-size:1rem">(${ps.length})</span>
       </h2>
       <div class="pub-persons-grid">`;
-    ps.forEach(p=>{
-      teamHtml+=`<div class="pub-person-card" onclick="showPublicDashboard('${p.id}')">
+    ps.forEach(p => {
+      teamHtml += `<div class="pub-person-card" onclick="showPublicDashboard('${p.id}')">
         <div class="pub-person-avatar" style="background:${METIER_COLORS[p.metier]}33;color:${METIER_COLORS[p.metier]}">${(p.prenom[0]+p.nom[0]).toUpperCase()}</div>
         <div class="pub-person-name">${p.prenom} ${p.nom.toUpperCase()}</div>
         <div class="pub-person-role">${POSTE_LABELS[p.poste]||p.poste}</div>
       </div>`;
     });
-    teamHtml+=`</div></div>`;
+    teamHtml += `</div></div>`;
   });
-  teamHtml+=`</div></div>`;
-  document.getElementById('pubTeamList').innerHTML=teamHtml;
+  teamHtml += `</div></div>`;
+  document.getElementById('pubTeamList').innerHTML = teamHtml;
 }
+
 
 // =============================================
 // PUBLIC VIEW: PERSONAL DASHBOARD
@@ -3832,9 +3892,11 @@ function copyShareLink() {
 
 
 // 3. AFFICHAGE DU PORTAIL (Liste des noms)
+
 function renderTechPortal() {
-  const ev = window.PUBLIC_EV; // On récupère les données en direct !
+  const ev = window.PUBLIC_EV;
   if (!ev) return;
+  console.log("DEBUG: renderTechPortal est utilisée.");
 
   document.body.style.background = "#0F0E17";
   document.body.innerHTML = `
@@ -3842,8 +3904,14 @@ function renderTechPortal() {
       <header style="text-align: center; margin-bottom: 40px;">
         <div style="font-size: 2.5rem; margin-bottom: 15px;">⚡</div>
         <h1 style="font-size: 1.8rem; margin-bottom: 8px;">${ev.name}</h1>
-        <p style="color: #A9A6C3;">Portail Équipe - Choisis ton nom :</p>
+        <p style="color: #A9A6C3; margin-bottom: 20px;">Portail Équipe - Choisis ton nom :</p>
+        
+        <!-- BOUTON AJOUTÉ ICI -->
+        <button onclick="renderProductionDashboard()" style="width: 100%; padding: 14px; background: #4F46E5; color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: background 0.2s;">
+          📊 ESPACE PRODUCTION
+        </button>
       </header>
+
       <div style="display: grid; gap: 12px;">
         ${(ev.personnel || []).sort((a,b) => a.prenom.localeCompare(b.prenom)).map(p => `
           <button onclick="renderTechDetail('${p.id}')" 
@@ -3856,6 +3924,7 @@ function renderTechPortal() {
     </div>
   `;
 }
+
 
 
 // =============================================
@@ -3909,47 +3978,22 @@ window.addEventListener('load', () => {
   const hash = window.location.hash;
   
   if (hash.startsWith('#live=')) {
-    // 👤 On ouvre le mode Technicien (Lien)
+    // 👤 MODE TECHNICIEN : On arrête tout ici, on ne laisse pas le reste s'exécuter
     const eventId = hash.replace('#live=', '');
     initPublicPortal(eventId);
-  } else {
-    // 👑 On ouvre le mode Administrateur
-    STORE.loadAllEvents(() => {
-      // Rafraîchissement automatique si un autre Admin modifie un truc
-      if (currentEventId && document.getElementById('viewEvent').classList.contains('active')) {
-        renderEventHeader();
-        renderTab(currentTab);
-      } else if (document.getElementById('viewHome').classList.contains('active')) {
-        renderHome();
-      }
-    });
-    showHome();
-  }
+    return; // <--- AJOUTE CE "return" ICI : Il force le script à quitter la fonction
+  } 
+
+  // 👑 MODE ADMINISTRATEUR : Si on n'est pas en mode live, on charge normalement
+  STORE.loadAllEvents(() => {
+    // Petite sécurité supplémentaire avant d'afficher l'accueil
+    if (document.getElementById('viewHome')) {
+       showHome();
+    }
+  });
 });
 
-// 2. PORTAIL : LISTE DES NOMS
-function renderTechPortal() {
-  const ev = window.PUBLIC_EV;
-  document.body.style.background = "#0F0E17";
-  let html = `
-    <div style="max-width: 500px; margin: 0 auto; padding: 30px 20px; font-family: 'Inter', sans-serif; color: #F8F8FF;">
-      <header style="text-align: center; margin-bottom: 40px;">
-        <div style="font-size: 2.5rem; margin-bottom: 15px;">⚡</div>
-        <h1 style="font-size: 1.8rem; margin-bottom: 8px;">${ev.name}</h1>
-        <p style="color: #A9A6C3;">Portail Équipe - Choisis ton nom :</p>
-      </header>
-      <div style="display: grid; gap: 12px;">
-        ${(ev.personnel || []).sort((a,b) => a.prenom.localeCompare(b.prenom)).map(p => `
-          <button onclick="renderTechDetail('${p.id}')" 
-            style="width: 100%; padding: 18px; border: 1px solid #2D2B45; background: #1A1928; color: white; border-radius: 12px; text-align: left; font-size: 1.1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-            <span><strong>${p.prenom}</strong> ${p.nom.toUpperCase()}</span>
-            <span style="font-size: 0.7rem; background: ${PUB_COLORS[p.metier] || '#4F46E5'}; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; font-weight: 700;">${p.metier}</span>
-          </button>
-        `).join('')}
-      </div>
-    </div>`;
-  document.body.innerHTML = html;
-}
+
 
 // 3. DASHBOARD : DÉTAIL D'UN TECHNICIEN
 // GÉNÉRATION DES BLOCS PLANNING (PAR JOUR)
@@ -4275,6 +4319,999 @@ async function confirmDeleteTask() {
   renderPlanning();
 }
 
+async function updateAllTasksWithNewTeamMembers(ev) {
+  if (!ev.planning) return;
+
+  // On parcourt chaque tâche
+  ev.planning.forEach(task => {
+    if (task.teams && task.teams.length > 0) {
+      let newPersonList = [];
+      
+      // Récupérer tous les membres des équipes sélectionnées
+      task.teams.forEach(teamId => {
+        const team = ev.equipes.find(t => t.id === teamId);
+        if (team && team.members) {
+          team.members.forEach(mId => {
+            if (!newPersonList.includes(mId)) newPersonList.push(mId);
+          });
+        }
+      });
+      
+      // Mise à jour de la liste des personnes assignées
+      task.persons = newPersonList;
+    }
+  });
+
+  await STORE.saveEvent(ev);
+  renderPlanning();
+}
+
+function renderProductionDashboard() {
+  const ev = window.PUBLIC_EV;
+  if (!ev) return;
+
+  const getP = (pid) => {
+    const found = (ev.personnel || []).find(x => String(x.id).trim() === String(pid).trim());
+    return found || { prenom: 'Inconnu', nom: '?', metier: '', poste: '', tel: '', mail: '', allergies: '', notes: '', days: [] };
+  };
+
+  const PUB_METIERS_LABELS = { lumiere:'💡 Lumière', son:'🔊 Son', video:'📹 Vidéo', structure:'🏗️ Structure', block:'🚧 Block', road:'🛣️ Road' };
+  const PUB_POSTES_LABELS = { regisseur:'Régisseur', technicien:'Technicien', assistant:'Assistant', road:'Road', 'chef-chantier':'Chef de chantier' };
+  const METIER_COLORS = { lumiere:'#F59E0B', son:'#3B82F6', video:'#8B5CF6', structure:'#10B981', block:'#EF4444', road:'#6B7280' };
+  const MEAL_ICONS = { 'petit-dejeuner':'☕', 'dejeuner':'🥗', 'diner':'🍽️', 'collation':'🥪', 'autre':'🍴' };
+  const days = getEventDays(ev);
+
+  // ── STYLES ──────────────────────────────────────────────
+  const styles = `
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: 'Inter', -apple-system, sans-serif; background: #0F0E17; color: #F8F8FF; }
+
+      .prod-wrap { max-width: 1200px; margin: 0 auto; padding: 0 20px 80px 20px; }
+
+      /* NAV STICKY */
+      .prod-nav {
+        position: sticky; top: 0; z-index: 1000;
+        background: rgba(15,14,23,0.95); backdrop-filter: blur(12px);
+        border-bottom: 1px solid #2D2B45;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 20px; height: 56px;
+        margin: 0 -20px 0 -20px;
+      }
+      .prod-nav-title { font-size: 0.65rem; letter-spacing: 2px; font-weight: 800; color: #6B6890; text-transform: uppercase; }
+      .prod-back { border: none; background: none; color: #4F46E5; font-weight: 700; cursor: pointer; font-size: 0.85rem; font-family: inherit; padding: 8px 12px; margin-left: -8px; }
+      .prod-back:hover { opacity: 0.8; }
+
+      /* HERO */
+      .prod-hero { background: linear-gradient(135deg, #4F46E5, #7C3AED); border-radius: 20px; padding: 32px 28px; margin-bottom: 32px; }
+      .prod-hero h1 { margin: 0 0 6px 0; font-size: 2rem; font-weight: 800; }
+      .prod-hero-meta { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+      .prod-hero-meta span { font-size: 0.85rem; opacity: 0.9; display: flex; align-items: center; gap: 5px; }
+      .prod-hero-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 22px; }
+      .prod-stat { background: rgba(255,255,255,0.15); border-radius: 10px; padding: 14px; text-align: center; }
+      .prod-stat-val { font-size: 1.8rem; font-weight: 900; }
+      .prod-stat-lbl { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85; margin-top: 5px; }
+
+      /* SHORTCUTS GRID */
+      .prod-shortcuts { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); 
+        gap: 12px; 
+        margin-bottom: 32px;
+      }
+      .prod-shortcut-btn { 
+        background: #1A1928; 
+        border: 1px solid #2D2B45; 
+        border-radius: 12px; 
+        padding: 16px 12px; 
+        text-align: center; 
+        cursor: pointer; 
+        transition: all 0.2s;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #F8F8FF;
+        font-family: inherit;
+      }
+      .prod-shortcut-btn:hover { 
+        background: #252438; 
+        border-color: #4F46E5; 
+        transform: translateY(-2px);
+      }
+      .prod-shortcut-icon { font-size: 1.8rem; display: block; margin-bottom: 8px; }
+      .prod-shortcut-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+
+      /* SECTIONS */
+      .prod-section { display: none; }
+      .prod-section.active { display: block; }
+      .prod-home-active .prod-section { display: none; }
+
+      .section-header { 
+        display: flex; 
+        align-items: center; 
+        gap: 12px; 
+        margin-bottom: 20px; 
+        padding-bottom: 16px; 
+        border-bottom: 2px solid #2D2B45;
+      }
+      .section-icon { font-size: 2rem; }
+      .section-title { font-size: 1.4rem; font-weight: 800; }
+
+      /* PERSONNEL */
+      .personnel-card { background: #1A1928; border: 1px solid #2D2B45; border-radius: 10px; padding: 14px; display: flex; gap: 12px; margin-bottom: 10px; }
+      .personnel-avatar { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+      .personnel-info { flex: 1; }
+      .personnel-name { font-weight: 700; font-size: 0.9rem; margin-bottom: 3px; }
+      .personnel-meta { display: flex; gap: 10px; font-size: 0.75rem; color: #A9A6C3; margin-bottom: 6px; }
+      .personnel-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+      .tag { padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+      .allergy-badge { background: rgba(239,68,68,0.15); color: #EF4444; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; }
+
+      /* PLANNING */
+      .planning-container { overflow-x: auto; }
+      .planning-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+      .planning-day-section { background: #1A1928; border: 1px solid #2D2B45; border-radius: 12px; overflow: hidden; }
+      .planning-day-title { font-weight: 700; padding: 12px 16px; background: #252438; border-bottom: 1px solid #2D2B45; }
+      .planning-body { display: flex; }
+      .planning-time-col { width: 50px; background: #0F0E17; border-right: 1px solid #2D2B45; flex-shrink: 0; font-size: 0.65rem; color: #6B6890; text-align: center; }
+      .planning-time-slot { border-bottom: 1px solid #2D2B45; padding: 4px; height: 80px; display: flex; align-items: center; justify-content: center; }
+      .planning-cols { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); position: relative; }
+      .planning-col { position: relative; border-right: 1px solid #2D2B45; }
+      .planning-col:last-child { border-right: none; }
+      .planning-col-lines { }
+      .planning-hour-line { position: absolute; width: 100%; border-bottom: 1px solid #2D2B45; height: 0; }
+      .planning-task { position: absolute; border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; font-weight: 600; overflow: hidden; min-height: 40px; }
+      .planning-task-header { display: flex; align-items: center; gap: 4px; font-weight: 700; }
+      .planning-task-time { font-weight: 800; min-width: 40px; }
+      .planning-task-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .planning-task-notes { font-size: 0.65rem; opacity: 0.8; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+      /* CATERING */
+      .catering-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+      .catering-card { background: #1A1928; border: 1px solid #2D2B45; border-radius: 10px; padding: 14px; }
+      .catering-card-header { margin-bottom: 10px; }
+      .catering-card-title { font-weight: 700; font-size: 0.9rem; }
+      .catering-attendees { display: flex; flex-direction: column; gap: 6px; }
+      .catering-attendee { font-size: 0.8rem; padding: 6px 0; border-bottom: 1px solid #2D2B45; }
+      .catering-attendee:last-child { border-bottom: none; }
+
+      /* LOGEMENTS */
+      .logements-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+      .logement-card { background: #1A1928; border: 1px solid #2D2B45; border-radius: 12px; padding: 16px; }
+      .logement-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+      .logement-info-item { background: #252438; border-radius: 8px; padding: 10px; }
+      .logement-info-label { font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: #6B6890; margin-bottom: 4px; }
+      .logement-info-value { font-size: 0.85rem; font-weight: 600; }
+      .occupant-row { font-size: 0.8rem; color: #A9A6C3; padding: 4px 0; }
+
+      /* VEHICLES */
+      .vehicle-card { background: #1A1928; border: 1px solid #2D2B45; border-radius: 10px; padding: 14px; }
+      .vehicle-header { margin-bottom: 12px; }
+      .vehicle-plaque { font-size: 0.75rem; color: #6B6890; font-family: monospace; font-weight: 700; margin-top: 3px; }
+      .transport-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+      .acces-item { background: #252438; border-radius: 8px; padding: 10px; }
+      .acces-label { font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: #6B6890; margin-bottom: 4px; }
+      .acces-val { font-size: 0.8rem; font-weight: 600; }
+      .mono { font-family: 'Monaco', 'Courier', monospace; letter-spacing: 0.5px; }
+
+      /* CONTACTS */
+      .contacts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
+      .contact-card { background: #1A1928; border: 1px solid #2D2B45; border-radius: 10px; padding: 14px; }
+      .contact-header { font-weight: 700; margin-bottom: 10px; font-size: 0.9rem; }
+      .contact-row { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #2D2B45; }
+      .contact-row:last-child { border-bottom: none; }
+      .contact-row span { color: #6B6890; }
+
+      /* BADGES */
+      .prod-badge { display: inline-block; padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; }
+
+      @media (max-width: 768px) {
+        .prod-hero-stats { grid-template-columns: repeat(2, 1fr); }
+        .prod-shortcuts { grid-template-columns: repeat(2, 1fr); }
+        .logements-grid { grid-template-columns: 1fr; }
+        .contacts-grid { grid-template-columns: 1fr; }
+        .planning-grid { grid-template-columns: 1fr; }
+      }
+
+.prod-task-item:hover {
+  filter: brightness(1.2);
+  box-shadow: 0 0 15px rgba(79, 70, 229, 0.5);
+  transform: scale(1.02);
+}
+
+.prod-task-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+  backdrop-filter: blur(8px);
+}
+
+.prod-task-modal-overlay.active {
+  display: flex;
+}
+
+.prod-task-modal {
+  background: #1A1928;
+  border: 1px solid #2D2B45;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 500px;
+  padding: 30px;
+  position: relative;
+}
+
+.prod-task-modal-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  color: #A9A6C3;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.prod-task-modal-close:hover {
+  color: #F8F8FF;
+}
+
+.prod-task-modal h2 {
+  color: #4F46E5;
+  margin: 0 0 20px 0;
+  font-size: 1.3rem;
+}
+
+.prod-task-modal-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #2D2B45;
+}
+
+.prod-task-modal-section:last-child {
+  border-bottom: none;
+}
+
+.prod-task-modal-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #6B6890;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.prod-task-modal-value {
+  font-size: 0.9rem;
+  color: #F8F8FF;
+  white-space: pre-wrap;
+}
+
+.prod-task-modal-persons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prod-task-person-item {
+  background: #252438;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  border-left: 3px solid #4F46E5;
+}
+
+.prod-task-person-name {
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.prod-task-person-meta {
+  font-size: 0.75rem;
+  color: #A9A6C3;
+}
+.prod-accordion-btn {
+  width: 100%;
+  padding: 12px;
+  background: #252438;
+  border: 1px solid #2D2B45;
+  color: #A9A6C3;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.prod-accordion-btn:hover {
+  background: #2D2B45;
+  color: #A78BFA;
+}
+
+.prod-accordion-btn::after {
+  content: '▼';
+  font-size: 0.7rem;
+  transition: transform 0.3s ease;
+  margin-left: auto;
+}
+
+.prod-accordion-btn[data-open="true"]::after {
+  transform: rotate(180deg);
+}
+
+.prod-accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease;
+}
+
+.prod-accordion-content[data-open="true"] {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+
+.prod-task-modal-persons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+}
+.prod-accordion-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.prod-accordion-content::-webkit-scrollbar-track {
+  background: #1A1928;
+  border-radius: 3px;
+}
+
+.prod-accordion-content::-webkit-scrollbar-thumb {
+  background: #4F46E5;
+  border-radius: 3px;
+}
+
+.prod-accordion-content::-webkit-scrollbar-thumb:hover {
+  background: #6366F1;
+}
+
+
+    </style>
+  `;
+
+  // ── HELPER FUNCTIONS ────────────────────────────────────
+  const section = (id, icon, title, content) => {
+    return `
+      <div id="sec-${id}" class="prod-section">
+        <div class="section-header">
+          <span class="section-icon">${icon}</span>
+          <h2 class="section-title">${title}</h2>
+        </div>
+        ${content}
+      </div>
+    `;
+  };
+
+  const formatDate = (d) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  const formatDateTime = (d) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('fr-FR') + ' ' + new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDateShort = (d) => {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  };
+
+  // ── HERO SECTION ────────────────────────────────────────
+  const heroHtml = `
+    <div class="prod-hero">
+      <h1>${ev.nom || 'ÉVÉNEMENT'}</h1>
+      <div class="prod-hero-meta">
+        ${ev.lieu ? `<span>📍 ${ev.lieu}</span>` : ''}
+        ${ev.type ? `<span>🎪 ${ev.type}</span>` : ''}
+        ${ev.dateDebut ? `<span>📅 ${formatDate(ev.dateDebut)} → ${ev.dateFin ? formatDate(ev.dateFin) : '?'}</span>` : ''}
+        ${ev.chef ? `<span>🎯 Chef : ${ev.chef}</span>` : ''}
+      </div>
+      <div class="prod-hero-stats">
+        <div class="prod-stat">
+          <div class="prod-stat-val">${(ev.personnel||[]).length}</div>
+          <div class="prod-stat-lbl">Techniciens</div>
+        </div>
+        <div class="prod-stat">
+          <div class="prod-stat-val">${days.length}</div>
+          <div class="prod-stat-lbl">Jours</div>
+        </div>
+        <div class="prod-stat">
+          <div class="prod-stat-val">${(ev.logements||[]).length}</div>
+          <div class="prod-stat-lbl">Logements</div>
+        </div>
+        <div class="prod-stat">
+          <div class="prod-stat-val">${(ev.vehicles||[]).length}</div>
+          <div class="prod-stat-lbl">Véhicules</div>
+        </div>
+        <div class="prod-stat">
+          <div class="prod-stat-val">${(ev.transport||[]).length}</div>
+          <div class="prod-stat-lbl">Camions</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // ── SHORTCUTS ──────────────────────────────────────────
+  const shortcutsHtml = `
+    <div class="prod-shortcuts">
+      <button class="prod-shortcut-btn" data-section="personnel">
+        <span class="prod-shortcut-icon">👥</span>
+        <span class="prod-shortcut-label">Équipe</span>
+      </button>
+      <button class="prod-shortcut-btn" data-section="planning">
+        <span class="prod-shortcut-icon">📅</span>
+        <span class="prod-shortcut-label">Planning</span>
+      </button>
+      <button class="prod-shortcut-btn" data-section="catering">
+        <span class="prod-shortcut-icon">🍽️</span>
+        <span class="prod-shortcut-label">Catering</span>
+      </button>
+      <button class="prod-shortcut-btn" data-section="logements">
+        <span class="prod-shortcut-icon">🏨</span>
+        <span class="prod-shortcut-label">Logements</span>
+      </button>
+      <button class="prod-shortcut-btn" data-section="acces">
+        <span class="prod-shortcut-icon">🚗</span>
+        <span class="prod-shortcut-label">Accès</span>
+      </button>
+      <button class="prod-shortcut-btn" data-section="contacts">
+        <span class="prod-shortcut-icon">📞</span>
+        <span class="prod-shortcut-label">Contacts</span>
+      </button>
+      <button class="prod-shortcut-btn" data-section="transport">
+        <span class="prod-shortcut-icon">🚛</span>
+        <span class="prod-shortcut-label">Transport</span>
+      </button>
+    </div>
+  `;
+
+  // ── CONTENT GENERATION (avec try/catch) ─────────────────
+  let personnelHtml = '';
+  let planningHtml = '';
+  let cateringHtml = '';
+  let logementsHtml = '';
+  let accesHtml = '';
+  let contactsHtml = '';
+  let transportHtml = '';
+
+  try {
+    // ── PERSONNEL ──────────────────────────────────────────
+    if (!(ev.personnel || []).length) {
+      personnelHtml = `<div style="text-align:center;color:#6B6890;padding:20px;">Aucun technicien.</div>`;
+    } else {
+      const byMetier = {};
+      (ev.personnel || []).forEach(p => {
+        const m = p.metier || 'autre';
+        if (!byMetier[m]) byMetier[m] = [];
+        byMetier[m].push(p);
+      });
+      Object.entries(byMetier).forEach(([metier, persons]) => {
+        personnelHtml += `<div style="margin-bottom:20px;">
+          <div style="font-size:0.85rem;font-weight:700;padding:8px 12px;background:#252438;border-radius:8px;margin-bottom:10px;color:${METIER_COLORS[metier]||'#4F46E5'};">${PUB_METIERS_LABELS[metier] || metier}</div>`;
+        persons.forEach(p => {
+          const initials = ((p.prenom||'?')[0] + (p.nom||'?')[0]).toUpperCase();
+          personnelHtml += `
+            <div class="personnel-card">
+              <div class="personnel-avatar" style="background:${METIER_COLORS[p.metier]||'#4F46E5'}22;color:${METIER_COLORS[p.metier]||'#4F46E5'}">${initials}</div>
+              <div class="personnel-info">
+                <div class="personnel-name">${p.prenom || ''} ${(p.nom||'').toUpperCase()}</div>
+                <div class="personnel-meta">
+                  ${p.tel ? `<span>${p.tel}</span>` : ''}
+                  ${p.mail ? `<span>${p.mail}</span>` : ''}
+                </div>
+                <div class="personnel-tags">
+                  ${p.poste ? `<span class="tag" style="background:${METIER_COLORS[p.metier]||'#4F46E5'}22;color:${METIER_COLORS[p.metier]||'#4F46E5'}">${PUB_POSTES_LABELS[p.poste] || p.poste}</span>` : ''}
+                  ${p.allergies ? `<span class="allergy-badge">⚠️ ${p.allergies}</span>` : ''}
+                </div>
+                ${p.notes ? `<div style="margin-top:6px;font-size:0.75rem;color:#6B6890;font-style:italic;">📝 ${p.notes}</div>` : ''}
+                ${p.days && p.days.length ? `<div style="margin-top:6px;font-size:0.75rem;color:#A9A6C3;">📅 ${p.days.map(d=>formatDateShort(d)).join(', ')}</div>` : ''}
+              </div>
+            </div>
+          `;
+        });
+        personnelHtml += `</div>`;
+      });
+    }
+  } catch(e) { personnelHtml = `<div style="color:#EF4444;">Erreur chargement équipe : ${e.message}</div>`; }
+
+  try {
+      // ── PLANNING ───────────────────────────────────────────
+    let metiers = [...new Set((ev.personnel || []).map(p => p.metier).filter(Boolean))];
+    if (!metiers.length) metiers = ['lumiere', 'son', 'video', 'structure'];
+
+    if (!days.length) {
+      planningHtml = `<div style="text-align:center;color:#6B6890;padding:20px;">Définissez les dates.</div>`;
+    } else {
+      const HOUR_H = 120;
+      const HEADER_OFFSET = 38;
+      planningHtml = `<div class="planning-container"><div class="planning-grid">`;
+
+      days.forEach(day => {
+        const dayTasks = (ev.planning || []).filter(t => t && t.day === day);
+        const dayMeals = (ev.catering || []).filter(m => m && m.day === day && m.time);
+        const allItems = [...dayTasks, ...dayMeals.map(m => ({ timeStart: m.time, timeEnd: m.time }))];
+
+        let minHour = 8, maxHour = 20;
+        if (allItems.length > 0) {
+          let mn = 24, mx = 0;
+          allItems.forEach(t => {
+            if (!t.timeStart) return;
+            const [sh] = t.timeStart.split(':').map(Number);
+            const [eh, em] = (t.timeEnd || t.timeStart).split(':').map(Number);
+            let sH = sh < 6 ? sh + 24 : sh;
+            let eH = eh < 6 ? eh + 24 : eh;
+            if (em > 0) eH += 1;
+            if (sH < mn) mn = sH;
+            if (eH > mx) mx = eH;
+          });
+          minHour = mn - 1;
+          maxHour = mx + 1;
+        }
+
+        const START_HOUR = minHour;
+        const END_HOUR = maxHour;
+        const columnHeight = ((END_HOUR - START_HOUR) * HOUR_H) + HEADER_OFFSET;
+
+        planningHtml += `
+          <div class="planning-day-section">
+            <div class="planning-day-title">📆 ${formatDate(day)}</div>
+            <div class="planning-body">
+              <div class="planning-time-col">
+                <div style="height:${HEADER_OFFSET}px;"></div>`;
+
+        for (let h = START_HOUR; h < END_HOUR; h++) {
+          const displayH = h >= 24 ? h - 24 : h;
+          planningHtml += `<div class="planning-time-slot" style="height:${HOUR_H}px;">${String(displayH).padStart(2,'0')}:00</div>`;
+        }
+
+        planningHtml += `</div><div class="planning-cols">`;
+
+        metiers.forEach(metier => {
+          planningHtml += `
+            <div class="planning-col" style="height:${columnHeight}px;">
+              <div style="position:absolute;top:0;left:0;right:0;height:${HEADER_OFFSET}px;background:#1A1928;z-index:20;border-bottom:1px solid #2D2B45;padding:8px;text-align:center;font-weight:700;font-size:0.8rem;text-transform:uppercase;color:${METIER_COLORS[metier]||'#4F46E5'};">
+                ${PUB_METIERS_LABELS[metier] || metier}
+              </div>
+              <div class="planning-col-lines">`;
+
+          for (let h = START_HOUR; h < END_HOUR; h++) {
+            planningHtml += `<div class="planning-hour-line" style="top:${(h - START_HOUR) * HOUR_H + HEADER_OFFSET}px"></div>`;
+          }
+
+          planningHtml += `</div>`;
+
+          const colTasks = dayTasks.filter(t => (t.metiers && t.metiers.includes(metier)) || t.metier === metier);
+          const colMeals = dayMeals.filter(m => (m.persons || []).some(pid => {
+            const p = (ev.personnel || []).find(pers => String(pers.id) === String(pid));
+            return p && p.metier === metier;
+          }));
+
+          const allColItems = [
+            ...colTasks.map(t => ({ ...t, isMeal: false })),
+            ...colMeals.map(m => ({ ...m, isMeal: true, title: `🍽️ ${(m.type||'repas').toUpperCase()}`, timeStart: m.time, timeEnd: m.time }))
+          ];
+
+          allColItems.forEach((task, index) => {
+            if (!task.timeStart) return;
+            const [sh, sm] = task.timeStart.split(':').map(Number);
+            let [eh, em] = (task.timeEnd || task.timeStart).split(':').map(Number);
+            let sH = sh < 6 ? sh + 24 : sh;
+            let eH = eh < 6 ? eh + 24 : eh;
+            if (task.isMeal) { eH = sH + 1; em = sm; }
+
+            const startMin = (sH * 60 + (sm||0)) - (START_HOUR * 60);
+            const endMin   = (eH * 60 + (em||0)) - (START_HOUR * 60);
+            const top    = ((startMin / 60) * HOUR_H) + HEADER_OFFSET;
+            const height = Math.max(20, ((endMin - startMin) / 60) * HOUR_H);
+            const bgColor = task.isMeal ? '#10B981' : (task.color || '#4F46E5');
+
+           
+  planningHtml += `
+  <div class="planning-task prod-task-item" 
+       style="top:${top}px;height:${height}px;background:${bgColor};color:#fff;z-index:${task.isMeal ? 500 : 10 + index};border:${task.isMeal ? '2px dashed rgba(255,255,255,0.5)' : '1px solid rgba(0,0,0,0.2)'}; cursor: pointer; transition: all 0.2s;" 
+       data-task-id="${task.id}"
+       title="${task.title}${task.notes ? '\n\n' + task.notes : ''}"
+       onclick="openProdTaskModal('${task.id}', event)">
+    <div class="planning-task-header">
+      <span class="planning-task-time">${task.timeStart} - ${task.timeEnd || task.timeStart}</span>
+      <span class="planning-task-title">${task.title || ''}</span>
+    </div>
+
+
+                ${task.notes && height > 60 && !task.isMeal ? `<div class="planning-task-notes">${task.notes}</div>` : ''}
+              </div>
+            `;
+          });
+
+          planningHtml += `</div>`;
+        });
+
+        planningHtml += `</div></div></div>`;
+      });
+
+      planningHtml += `</div></div>`;
+    }
+  } catch(e) { planningHtml = `<div style="color:#EF4444;">Erreur chargement planning : ${e.message}</div>`; }
+
+  try {
+    // ── CATERING ───────────────────────────────────────────
+    const MEAL_LABELS = { 'petit-dejeuner':'PETIT-DÉJEUNER', 'dejeuner':'DÉJEUNER', 'diner':'DÎNER', 'collation':'COLLATION', 'autre':'AUTRE' };
+    const meals = ev.catering || [];
+    if (!meals.length) {
+      cateringHtml = `<div style="text-align:center;color:#6B6890;padding:20px;">Aucun repas planifié.</div>`;
+    } else {
+      days.forEach(day => {
+        const dayMeals = meals.filter(m => m.day === day);
+        if (!dayMeals.length) return;
+        cateringHtml += `<div style="margin-bottom:20px;">
+          <div style="font-size:0.85rem;font-weight:700;padding:8px 12px;background:#252438;border-radius:8px;margin-bottom:10px;">📆 ${formatDate(day)}</div>
+          <div class="catering-grid">`;
+        dayMeals.forEach(meal => {
+          const persons = (meal.persons || []).map(pid => (ev.personnel || []).find(p => String(p.id) === String(pid))).filter(Boolean);
+          const allergies = persons.filter(p => p.allergies);
+          const label = MEAL_LABELS[meal.type] || (meal.type||'').toUpperCase();
+          cateringHtml += `
+            <div class="catering-card">
+              <div class="catering-card-header">
+                <div class="catering-card-title">${MEAL_ICONS[meal.type]||'🍴'} ${label} ${meal.time ? `· ${meal.time}` : ''}</div>
+              </div>
+              ${meal.lieu ? `<div style="font-size:0.8rem;color:#A9A6C3;margin-bottom:8px;">📍 ${meal.lieu}</div>` : ''}
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <span style="font-size:0.8rem;color:#A9A6C3;">Convives</span>
+                <span class="prod-badge" style="background:rgba(79,70,229,0.2);color:#A78BFA;">${persons.length}</span>
+              </div>
+              <div class="catering-attendees">
+                ${persons.map(p => `
+                  <div class="catering-attendee">
+                    <span>${p.prenom} ${(p.nom||'').toUpperCase()}</span>
+                    ${p.allergies ? `<span class="allergy-badge">⚠️ ${p.allergies}</span>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+              ${allergies.length ? `<div style="margin-top:8px;padding:8px;background:rgba(239,68,68,0.1);border-radius:6px;border:1px solid rgba(239,68,68,0.2);font-size:0.8rem;color:#EF4444;">⚠️ ${allergies.length} restriction(s)</div>` : ''}
+              ${meal.notes ? `<div style="margin-top:8px;font-size:0.8rem;color:#6B6890;font-style:italic;">📝 ${meal.notes}</div>` : ''}
+            </div>
+          `;
+        });
+        cateringHtml += `</div></div>`;
+      });
+    }
+  } catch(e) { cateringHtml = `<div style="color:#EF4444;">Erreur chargement catering : ${e.message}</div>`; }
+
+  try {
+  
+
+
+// ── LOGEMENTS ──────────────────────────────────────────
+    const logements = ev.logements || [];
+    if (!logements.length) {
+      logementsHtml = `<div style="text-align:center;color:#6B6890;padding:20px;">Aucun logement.</div>`;
+    } else {
+      logementsHtml = `<div class="logements-grid">`;
+      logements.forEach(lg => {
+        // ✅ CORRECTION : Récupère les occupants correctement
+        const occupants = (lg.persons || []).map(personObj => {
+          const pid = typeof personObj === 'object' ? personObj.id : personObj;
+          const found = (ev.personnel || []).find(p => String(p.id).trim() === String(pid).trim());
+          return found;
+        }).filter(p => p && p.prenom && p.prenom !== 'Inconnu');
+
+        logementsHtml += `
+          <div class="logement-card">
+            <div style="font-weight:700;margin-bottom:12px;">${lg.nom || 'Logement'}</div>
+            <div class="logement-info">
+              <div class="logement-info-item"><div class="logement-info-label">🛏️ Capacité</div><div class="logement-info-value">${lg.lits || '?'} lit(s)</div></div>
+              <div class="logement-info-item"><div class="logement-info-label">📍 Adresse</div><div class="logement-info-value">${lg.adresse || '—'}</div></div>
+              <div class="logement-info-item"><div class="logement-info-label">🅿️ Parking</div><div class="logement-info-value">${lg.parking || '—'}</div></div>
+              <div class="logement-info-item"><div class="logement-info-label">☕ P'tit-dej</div><div class="logement-info-value">${lg.petit_dej ? '✅ Inclus' : '❌ Non'}</div></div>
+              ${lg.tel ? `<div class="logement-info-item"><div class="logement-info-label">📞 Tél.</div><div class="logement-info-value mono">${lg.tel}</div></div>` : ''}
+              ${lg.prix ? `<div class="logement-info-item"><div class="logement-info-label">💶 Prix</div><div class="logement-info-value">${lg.prix}</div></div>` : ''}
+            </div>
+            ${lg.cles_methode ? `<div style="padding:10px;background:#252438;border-radius:8px;font-size:0.8rem;margin-bottom:8px;"><strong>🔑 Récupération clés :</strong> ${lg.cles_methode} ${lg.cles_heure ? `· ${lg.cles_heure}` : ''}</div>` : ''}
+            ${lg.recup_cles ? `<div style="padding:10px;background:#252438;border-radius:8px;font-size:0.8rem;margin-bottom:8px;"><strong>🔑 Récupération :</strong> ${lg.recup_cles}</div>` : ''}
+            ${lg.remise_cles ? `<div style="padding:10px;background:#252438;border-radius:8px;font-size:0.8rem;margin-bottom:8px;"><strong>🔑 Retour clés :</strong> ${lg.remise_cles}</div>` : ''}
+
+            ${occupants.length ? `
+              <div style="margin-top:12px;border-top:1px solid #2D2B45;padding-top:10px;">
+                <div style="font-size:0.8rem;font-weight:700;margin-bottom:6px;color:#A9A6C3;">👥 Occupants (${occupants.length})</div>
+                ${occupants.map(p => `<div class="occupant-row">${p.prenom} ${(p.nom||'').toUpperCase()}</div>`).join('')}
+              </div>
+            ` : ''}
+            ${lg.notes ? `<div style="margin-top:10px;padding:10px;background:rgba(79,70,229,0.06);border-radius:8px;font-size:0.8rem;color:#A9A6C3;font-style:italic;border-left:3px solid rgba(79,70,229,0.3);">📝 ${lg.notes}</div>` : ''}
+          </div>
+        `;
+      });
+      logementsHtml += `</div>`;
+    }
+  } catch(e) { logementsHtml = `<div style="color:#EF4444;">Erreur chargement logements : ${e.message}</div>`; }
+  try {
+    // ── ACCÈS ──────────────────────────────────────────────
+    const acces = ev.acces || {};
+    const hasAccesInfo = acces.adresse || acces.parking || acces.codes || acces.methode || acces.notes;
+    if (hasAccesInfo) {
+      accesHtml += `
+        <div style="background:#1A1928;border:1px solid #2D2B45;border-radius:12px;padding:16px;margin-bottom:16px;">
+          <div style="font-weight:700;margin-bottom:12px;">📍 Informations d'accès site</div>
+          <div class="transport-grid">
+            ${acces.adresse ? `<div class="acces-item"><div class="acces-label">📍 Adresse</div><div class="acces-val">${acces.adresse}</div></div>` : ''}
+            ${acces.parking ? `<div class="acces-item"><div class="acces-label">🅿️ Parking</div><div class="acces-val">${acces.parking}</div></div>` : ''}
+            ${acces.codes ? `<div class="acces-item"><div class="acces-label">🔐 Codes</div><div class="acces-val mono">${acces.codes}</div></div>` : ''}
+            ${acces.methode ? `<div class="acces-item"><div class="acces-label">📋 Méthode</div><div class="acces-val">${acces.methode}</div></div>` : ''}
+          </div>
+          ${acces.notes ? `<div style="margin-top:10px;padding:10px;background:rgba(79,70,229,0.06);border-radius:8px;font-size:0.8rem;border-left:3px solid rgba(79,70,229,0.3);">📝 ${acces.notes}</div>` : ''}
+        </div>
+      `;
+    }
+    if ((ev.vehicles || []).length > 0) {
+      accesHtml += `<div class="catering-grid">`;
+      (ev.vehicles || []).forEach(v => {
+        const driver = v.driver ? getP(v.driver) : null;
+        const passengers = (v.passengers || []).map(pid => getP(pid)).filter(p => p.prenom !== 'Inconnu');
+        const typeIcon = { voiture:'🚙', camionnette:'🚐', camion:'🚛', moto:'🏍️' }[v.type] || '🚗';
+        accesHtml += `
+          <div class="vehicle-card">
+            <div class="vehicle-header">
+              <div>
+                <div style="font-weight:700;font-size:0.95rem;">${typeIcon} ${v.modele || '—'}</div>
+                <div class="vehicle-plaque">${(v.plaque||'').toUpperCase()}</div>
+              </div>
+            </div>
+            <div class="transport-grid">
+              ${driver ? `<div class="acces-item"><div class="acces-label">🧑‍🔧 Chauffeur</div><div class="acces-val">${driver.prenom} ${(driver.nom||'').toUpperCase()}</div></div>` : ''}
+              ${driver && driver.tel ? `<div class="acces-item"><div class="acces-label">📞 Tél.</div><div class="acces-val mono">${driver.tel}</div></div>` : ''}
+            </div>
+            ${passengers.length ? `
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2D2B45;">
+                <div style="font-size:0.75rem;font-weight:700;color:#6B6890;margin-bottom:6px;">👥 Passagers</div>
+                ${passengers.map(p => `<div style="font-size:0.8rem;color:#A9A6C3;padding:2px 0;">${p.prenom} ${(p.nom||'').toUpperCase()}</div>`).join('')}
+              </div>
+            ` : ''}
+            ${v.notes ? `<div style="margin-top:8px;padding:10px;background:rgba(79,70,229,0.06);border-radius:8px;font-size:0.75rem;color:#A9A6C3;border-left:3px solid rgba(79,70,229,0.3);">📝 ${v.notes}</div>` : ''}
+          </div>
+        `;
+      });
+      accesHtml += `</div>`;
+    }
+    if (!hasAccesInfo && !(ev.vehicles || []).length) {
+      accesHtml = `<div style="text-align:center;color:#6B6890;padding:20px;">Aucune info d'accès.</div>`;
+    }
+  } catch(e) { accesHtml = `<div style="color:#EF4444;">Erreur chargement accès : ${e.message}</div>`; }
+
+  try {
+    // ── CONTACTS ───────────────────────────────────────────
+    contactsHtml = `
+      <div style="background:rgba(239,68,68,0.05);border:1px solid #EF4444;border-radius:12px;padding:16px;margin-bottom:16px;">
+        <div style="color:#EF4444;font-weight:700;margin-bottom:12px;">🚨 Numéros d'urgence</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+          <div style="background:#1A1928;border:1px solid #EF4444;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:0.7rem;color:#EF4444;font-weight:700;">SAMU</div>
+            <div style="font-size:1.3rem;font-weight:900;color:#EF4444;">15</div>
+          </div>
+          <div style="background:#1A1928;border:1px solid #EF4444;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:0.7rem;color:#EF4444;font-weight:700;">POMPIERS</div>
+            <div style="font-size:1.3rem;font-weight:900;color:#EF4444;">18</div>
+          </div>
+          <div style="background:#1A1928;border:1px solid #EF4444;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:0.7rem;color:#EF4444;font-weight:700;">POLICE</div>
+            <div style="font-size:1.3rem;font-weight:900;color:#EF4444;">17</div>
+          </div>
+          <div style="background:#1A1928;border:1px solid #EF4444;border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:0.7rem;color:#EF4444;font-weight:700;">INTL.</div>
+            <div style="font-size:1.3rem;font-weight:900;color:#EF4444;">112</div>
+          </div>
+        </div>
+      </div>
+    `;
+    if ((ev.contacts || []).length > 0) {
+      contactsHtml += `<div class="contacts-grid">`;
+      (ev.contacts || []).forEach(c => {
+        contactsHtml += `
+          <div class="contact-card">
+            <div class="contact-header">${c.prenom || ''} ${(c.nom||'').toUpperCase()}</div>
+            ${c.role ? `<div class="contact-row"><span>👔 Rôle</span><strong>${c.role}</strong></div>` : ''}
+            ${c.org ? `<div class="contact-row"><span>🏢 Organisation</span><strong>${c.org}</strong></div>` : ''}
+            ${c.tel ? `<div class="contact-row"><span>📱 Tél</span><strong class="mono">${c.tel}</strong></div>` : ''}
+            ${c.mail ? `<div class="contact-row"><span>✉️ Mail</span><strong style="font-size:0.75rem;word-break:break-all;">${c.mail}</strong></div>` : ''}
+            ${c.notes ? `<div style="margin-top:8px;padding:8px;background:rgba(79,70,229,0.06);border-radius:6px;font-size:0.75rem;color:#A9A6C3;border-left:3px solid rgba(79,70,229,0.3);">📝 ${c.notes}</div>` : ''}
+          </div>
+        `;
+      });
+      contactsHtml += `</div>`;
+    }
+  } catch(e) { contactsHtml = `<div style="color:#EF4444;">Erreur chargement contacts : ${e.message}</div>`; }
+
+  try {
+    // ── TRANSPORT ──────────────────────────────────────────
+    const transports = ev.transport || [];
+    if (!transports.length) {
+      transportHtml = `<div style="text-align:center;color:#6B6890;padding:20px;">Aucun transport configuré.</div>`;
+    } else {
+      transportHtml = `<div class="catering-grid">`;
+      transports.forEach(tr => {
+        transportHtml += `
+          <div class="vehicle-card" style="border-top:3px solid #F59E0B;">
+            <div class="vehicle-header">
+              <div>
+                <div style="font-weight:700;font-size:0.95rem;">🚛 ${tr.societe || '—'}</div>
+                <div class="vehicle-plaque">${(tr.plaque||'').toUpperCase()}</div>
+              </div>
+            </div>
+            <div class="transport-grid">
+              ${tr.type ? `<div class="acces-item"><div class="acces-label">📦 Type</div><div class="acces-val">${tr.type}</div></div>` : ''}
+              ${tr.contenu ? `<div class="acces-item"><div class="acces-label">📋 Contenu</div><div class="acces-val">${tr.contenu}</div></div>` : ''}
+              ${tr.chauffeur ? `<div class="acces-item"><div class="acces-label">🧑‍✈️ Chauffeur</div><div class="acces-val">${tr.chauffeur}</div></div>` : ''}
+              ${tr.chauffeur_tel ? `<div class="acces-item"><div class="acces-label">📞 Tél.</div><div class="acces-val mono">${tr.chauffeur_tel}</div></div>` : ''}
+              ${tr.livraison ? `<div class="acces-item"><div class="acces-label">📤 Livraison</div><div class="acces-val" style="color:#10B981;font-size:0.75rem;">${formatDateTime(tr.livraison)}</div></div>` : ''}
+              ${tr.recup ? `<div class="acces-item"><div class="acces-label">📥 Récupération</div><div class="acces-val" style="color:#06B6D4;font-size:0.75rem;">${formatDateTime(tr.recup)}</div></div>` : ''}
+            </div>
+            ${tr.acces ? `<div style="margin-top:10px;padding:10px;background:rgba(245,158,11,0.06);border-radius:8px;font-size:0.75rem;color:#A9A6C3;border-left:3px solid rgba(245,158,11,0.4);">🔐 Accès : ${tr.acces}</div>` : ''}
+            ${tr.notes ? `<div style="margin-top:8px;padding:10px;background:rgba(79,70,229,0.06);border-radius:8px;font-size:0.75rem;color:#A9A6C3;font-style:italic;border-left:3px solid rgba(79,70,229,0.3);">📝 ${tr.notes}</div>` : ''}
+          </div>
+        `;
+      });
+      transportHtml += `</div>`;
+    }
+  } catch(e) { transportHtml = `<div style="color:#EF4444;">Erreur chargement transport : ${e.message}</div>`; }
+
+  // ── ASSEMBLAGE FINAL ─────────────────────────────────────
+  const html = styles + `
+    <nav class="prod-nav">
+      <button class="prod-back" onclick="location.reload()">← Portail</button>
+      <span class="prod-nav-title">⚡ Espace Production</span>
+      <span style="font-size:0.62rem;color:#6B6890;">${new Date().toLocaleString('fr-FR')}</span>
+    </nav>
+
+    <div class="prod-wrap prod-home-active">
+      ${heroHtml}
+      ${shortcutsHtml}
+
+      ${section('personnel', '👥', 'ÉQUIPE COMPLÈTE', personnelHtml)}
+      ${section('planning',  '📅', 'PLANNING COMPLET', planningHtml)}
+      ${section('catering',  '🍽️', 'CATERING', cateringHtml)}
+      ${section('logements', '🏨', 'LOGEMENTS', logementsHtml)}
+      ${section('acces',     '🚗', 'ACCÈS & VÉHICULES', accesHtml)}
+      ${section('contacts',  '📞', 'CONTACTS', contactsHtml)}
+      ${section('transport', '🚛', 'TRANSPORT MATÉRIEL', transportHtml)}
+    </div>
+  `;
+
+  document.body.innerHTML = html;
+
+  // ── EVENT LISTENERS ──────────────────────────────────────
+  const dashboardController = {
+    goHome: function() {
+      const wrap = document.querySelector('.prod-wrap');
+      wrap.classList.add('prod-home-active');
+      document.querySelectorAll('.prod-section').forEach(s => s.classList.remove('active'));
+      window.scrollTo(0, 0);
+    },
+    goToSection: function(sectionId) {
+      const wrap = document.querySelector('.prod-wrap');
+      wrap.classList.remove('prod-home-active');
+      document.querySelectorAll('.prod-section').forEach(s => s.classList.remove('active'));
+      const section = document.getElementById('sec-' + sectionId);
+      if (section) {
+        section.classList.add('active');
+      }
+      window.scrollTo(0, 0);
+    }
+  };
+
+  window.prodDashboard = dashboardController;
+
+  // Ajouter les listeners aux boutons
+  document.querySelectorAll('.prod-shortcut-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const sectionId = this.getAttribute('data-section');
+      dashboardController.goToSection(sectionId);
+    });
+  });
+
+  // ── MODAL POUR DÉTAIL DE TÂCHE ──────────────────────
+  window.openProdTaskModal = function(taskId, event) {
+    event.stopPropagation();
+    const ev = window.PUBLIC_EV;
+    const task = (ev.planning || []).find(t => t.id === taskId);
+    if (!task) return;
+
+    const persons = (task.persons || []).map(pid => 
+      (ev.personnel || []).find(p => p.id === pid)
+    ).filter(Boolean);
+
+    const modalHtml = `
+      <div class="prod-task-modal-overlay active" id="prodTaskModalOverlay" onclick="closeProdTaskModal()">
+        <div class="prod-task-modal" onclick="event.stopPropagation()">
+          <button class="prod-task-modal-close" onclick="closeProdTaskModal()">✕</button>
+          
+          <h2>${task.title}</h2>
+          
+          <div class="prod-task-modal-section">
+            <div class="prod-task-modal-label">⏱️ Horaires</div>
+            <div class="prod-task-modal-value" style="font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1rem;">
+              ${task.timeStart} - ${task.timeEnd || task.timeStart}
+            </div>
+          </div>
+
+          <div class="prod-task-modal-section">
+            <div class="prod-task-modal-label">📅 Jour</div>
+            <div class="prod-task-modal-value">${new Date(task.day + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+          </div>
+
+          ${task.notes ? `
+            <div class="prod-task-modal-section">
+              <div class="prod-task-modal-label">📝 Notes & Instructions</div>
+              <div class="prod-task-modal-value">${task.notes}</div>
+            </div>
+          ` : ''}
+
+                   ${persons.length ? `
+            <div class="prod-task-modal-section">
+              <button class="prod-accordion-btn" onclick="toggleProdAccordion(this)">
+                👥 Personnel assigné (${persons.length})
+              </button>
+                            <div class="prod-accordion-content" data-open="false">
+                <div class="prod-task-modal-persons">
+                  ${persons.map(p => `
+                    <div class="prod-task-person-item">
+                      <div class="prod-task-person-name">${p.prenom} ${p.nom.toUpperCase()}</div>
+                      <div class="prod-task-person-meta">${p.poste || ''} · ${p.metier || ''}</div>
+                      ${p.tel ? `<div class="prod-task-person-meta">📱 ${p.tel}</div>` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    // Ajouter la modal au DOM
+    const existingModal = document.getElementById('prodTaskModalOverlay');
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  };
+
+  window.closeProdTaskModal = function() {
+    const modal = document.getElementById('prodTaskModalOverlay');
+    if (modal) modal.remove();
+  };
+
+  // ── ACCORDÉON ──────────────────────────────
+  window.toggleProdAccordion = function(btn) {
+    const content = btn.nextElementSibling;
+    const isOpen = content.getAttribute('data-open') === 'true';
+    
+    content.setAttribute('data-open', isOpen ? 'false' : 'true');
+    btn.setAttribute('data-open', isOpen ? 'false' : 'true');
+  };
+
+
+
+  // Fermer la modal au clic en dehors
+  document.addEventListener('click', function(e) {
+    if (e.target.id === 'prodTaskModalOverlay') {
+      closeProdTaskModal();
+    }
+  });
+}
 
 
 // =============================================
