@@ -4,6 +4,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -83,7 +84,7 @@ textarea.form-control{resize:vertical;min-height:80px}
 .modal-footer{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--bg-card)}
 .modal-lg{max-width:800px}
 .modal-xl{max-width:1000px}
-.navbar{background:var(--bg-card);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:100}
+.navbar{background:var(--bg-card);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:1000}
 .navbar-brand{display:flex;align-items:center;gap:10px;font-size:1.3rem;font-weight:800;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .view{display:none}.view.active{display:block}
 .home-container{max-width:1200px;margin:0 auto;padding:32px 24px}
@@ -1081,18 +1082,32 @@ textarea.form-control{resize:vertical;min-height:80px}
       <h3>🔗 Lien technicien</h3>
       <button class="btn btn-ghost btn-icon" onclick="closeModal('modalShare')">✕</button>
     </div>
-    <div class="modal-body">
-      <p style="color:var(--text-soft);font-size:0.9rem">Partagez ce lien avec vos techniciens. Ils pourront consulter toutes les informations de l'opération et accéder à leur tableau de bord personnel.</p>
-      <div class="share-link-box" id="shareLinkBox">
-        <span style="flex:1" id="shareLinkText"></span>
-        <button class="btn btn-primary btn-sm" onclick="copyShareLink()">📋 Copier</button>
+    <div class="modal-body" style="text-align: center;">
+      <p style="color:var(--text-soft);font-size:0.9rem; margin-bottom: 15px;">Partagez ce lien avec vos techniciens. Ils pourront consulter toutes les informations de l'opération et accéder à leur tableau de bord personnel.</p>
+      
+      <!-- LE QR CODE -->
+      <div style="margin: 20px 0;">
+        <img id="shareQrCode" src="" alt="QR Code" style="background: white; padding: 10px; border-radius: 8px; width: 160px; height: 160px; display: none; margin: 0 auto; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">Scannez pour tester sur votre mobile</div>
       </div>
+
+      <div class="share-link-box" id="shareLinkBox" style="margin-bottom: 15px; text-align: left;">
+        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="shareLinkText"></span>
+      </div>
+
+      <!-- LES BOUTONS D'ACTION -->
+      <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
+        <button class="btn btn-primary" onclick="copyShareLink()">📋 Copier le lien</button>
+        <button class="btn btn-secondary" id="btnOpenShareLink" style="background: var(--bg-hover); color: white; border: 1px solid var(--border);">🌐 Ouvrir direct</button>
+      </div>
+
       <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:var(--radius-sm);padding:12px;font-size:0.85rem;color:var(--success)">
         ✅ Ce lien fonctionne directement dans le navigateur, sans connexion requise.
       </div>
     </div>
   </div>
 </div>
+
 
 <!-- ==============================
      VIEW: PUBLIC TEAM LIST
@@ -2359,14 +2374,21 @@ async function openTaskModal(id=null, preDay=null, preMetier=null, preStart=null
   let metiers = getUsedMetiers(ev);
   if(!metiers.length) metiers = ['lumiere', 'son', 'video', 'structure'];
 
-  // 1. Reset des champs
+  // 🚨 1. CORRECTION : On remplit le select des JOURS avant tout !
+  // Sinon on ne peut pas présélectionner la bonne date plus bas.
+  const ds = document.getElementById('tkDay');
+  if (ds) {
+    ds.innerHTML = days.map(d => `<option value="${d}">${formatDateShort(d)}</option>`).join('');
+  }
+
+  // 2. Reset des champs
   ['tkTitle', 'tkNotes', 'tkEditId'].forEach(f => {
     const el = document.getElementById(f);
     if(el) el.value = '';
   });
   document.getElementById('tkColor').value = '#4F46E5';
   
-  // 2. Préparation des variables de sélection
+  // 3. Préparation des variables de sélection
   let selectedPersons = [];
   let taskMetiers = [];
   let selectedTeams = [];
@@ -2375,35 +2397,34 @@ async function openTaskModal(id=null, preDay=null, preMetier=null, preStart=null
     const task = (ev.planning || []).find(t => t.id === id);
     if(task){
       document.getElementById('tkTitle').value = isDuplicate ? task.title + " (Copie)" : task.title;
-      document.getElementById('tkDay').value = task.day || days[0];
+      
+      // La sélection fonctionne maintenant car les <option> existent
+      if (ds) ds.value = task.day || days[0];
+      
       document.getElementById('tkStart').value = task.timeStart || '08:00';
       document.getElementById('tkEnd').value = task.timeEnd || '12:00';
       document.getElementById('tkColor').value = task.color || '#4F46E5';
       document.getElementById('tkNotes').value = task.notes || '';
       document.getElementById('tkEditId').value = isDuplicate ? '' : id;
+      
       selectedPersons = task.persons || [];
       taskMetiers = task.metiers || (task.metier ? [task.metier] : []);
       selectedTeams = task.teams || (task.team ? [task.team] : []); 
     }
   } else {
-    // Nouvel ajout
-    const ds = document.getElementById('tkDay');
-    if(preDay) ds.value = preDay;
+    // Nouvel ajout (clic sur le planning vide)
+    if(preDay && ds) ds.value = preDay; // Garde le jour sur lequel on a cliqué
     if(preStart) document.getElementById('tkStart').value = preStart;
     if(preEnd) document.getElementById('tkEnd').value = preEnd;
     taskMetiers = preMetier ? [preMetier] : [metiers[0]];
   }
-
-  // 3. Remplir le select des JOURS
-  const ds = document.getElementById('tkDay');
-  ds.innerHTML = days.map(d => `<option value="${d}">${formatDateShort(d)}</option>`).join('');
 
   // 4. Générer les puces MÉTIERS
   const metContainer = document.getElementById('tkMetiersContainer');
   metContainer.innerHTML = metiers.map(m => `
     <label class="day-chip ${taskMetiers.includes(m)?'active':''}" style="cursor:pointer; display:flex; align-items:center; gap:5px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 20px; ${taskMetiers.includes(m)?'background:var(--primary);color:white;':''}">
       <input type="checkbox" class="tk-metier-cb" value="${m}" ${taskMetiers.includes(m)?'checked':''} style="display:none">
-      ${(typeof METIER_LABELS !== 'undefined' ? METIER_LABELS[m] : m)}
+      ${(typeof METIER_LABELS !== 'undefined' && METIER_LABELS[m] ? METIER_LABELS[m] : m)}
     </label>
   `).join('');
 
@@ -2458,11 +2479,11 @@ async function openTaskModal(id=null, preDay=null, preMetier=null, preStart=null
   document.getElementById('tkPersons').value = JSON.stringify(selectedPersons);
   renderTaskPersonLists(selectedPersons);
 
+  // 8. Bouton de suppression
   const btnDelete = document.getElementById('btnDeleteTask');
   if (id && !isDuplicate) {
     btnDelete.style.display = 'block';
-    btnDelete.style.setProperty('display', 'block', 'important'); // Forçage CSS
-    console.log("Le bouton devrait être visible.");
+    btnDelete.style.setProperty('display', 'block', 'important');
   } else {
     btnDelete.style.display = 'none';
   }
@@ -3827,6 +3848,8 @@ async function initSortable(category, containerId) {
   Sortable.create(el, {
     animation: 150,
     handle: '.drag-handle',
+    filter: '.catering-block', // 🚨 AJOUT 1 : Ignore les blocs Catering
+    preventOnFilter: true,     // 🚨 AJOUT 2 : Bloque l'action si on clique dessus
     onEnd: async function (evt) { // <--- AJOUT DU MOT-CLÉ async ICI
       const ev = await STORE.getEvent(currentEventId);
       if (!ev || !ev[category]) return;
@@ -3866,13 +3889,26 @@ function generateShareLink(e) {
   const baseUrl = window.location.origin + window.location.pathname;
   const shareUrl = `${baseUrl}#live=${currentEventId}`;
   
-  // CORRECTION : On met à jour TOUS les textes (Onglet Infos + Modale)
+  // 1. Mettre à jour le texte du lien
   document.querySelectorAll('#shareLinkText').forEach(el => {
     el.textContent = shareUrl;
   });
   
   const boxEl = document.getElementById('shareLinkBox');
   if (boxEl) boxEl.dataset.link = shareUrl;
+
+  // 2. Générer le QR Code (via une API gratuite en ligne)
+  const qrImg = document.getElementById('shareQrCode');
+  if (qrImg) {
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareUrl)}`;
+    qrImg.style.display = 'block';
+  }
+
+  // 3. Configurer le bouton "Ouvrir direct"
+  const openBtn = document.getElementById('btnOpenShareLink');
+  if (openBtn) {
+    openBtn.onclick = () => window.open(shareUrl, '_blank');
+  }
 
   openModal('modalShare');
 }
@@ -3974,21 +4010,34 @@ function initPublicPortal(eventId) {
 }
 
 // 2. LANCEMENT DU LOGICIEL (ADMIN OU TECHNICIEN)
+let isFirstAdminLoad = true; // Empêche le retour à l'accueil lors d'une sauvegarde
+
 window.addEventListener('load', () => {
   const hash = window.location.hash;
   
   if (hash.startsWith('#live=')) {
-    // 👤 MODE TECHNICIEN : On arrête tout ici, on ne laisse pas le reste s'exécuter
+    // 👤 MODE TECHNICIEN
     const eventId = hash.replace('#live=', '');
     initPublicPortal(eventId);
-    return; // <--- AJOUTE CE "return" ICI : Il force le script à quitter la fonction
-  } 
+    return;
+  }
 
-  // 👑 MODE ADMINISTRATEUR : Si on n'est pas en mode live, on charge normalement
+  // 👑 MODE ADMINISTRATEUR
   STORE.loadAllEvents(() => {
-    // Petite sécurité supplémentaire avant d'afficher l'accueil
-    if (document.getElementById('viewHome')) {
-       showHome();
+    if (isFirstAdminLoad) {
+      // Au TOUT PREMIER chargement, on affiche l'accueil
+      isFirstAdminLoad = false;
+      if (document.getElementById('viewHome')) {
+         showHome();
+      }
+    } else {
+      // LORS D'UNE SAUVEGARDE : on rafraîchit la page actuelle sans bouger
+      if (currentEventId && document.getElementById('viewEvent').classList.contains('active')) {
+        renderEventHeader(); // Rafraîchit le titre/dates en haut
+        renderTab(currentTab); // Rafraîchit l'onglet actuel (logement, personnel, etc)
+      } else {
+        renderHome(); // Rafraîchit la liste des événements sur l'accueil
+      }
     }
   });
 });
@@ -4003,7 +4052,7 @@ function generatePublicPlanningHtml(myTasks, ev) {
   if (!myTasks.length) return '<div style="color:#6B6890; font-size:0.8rem;">Aucune tâche assignée.</div>';
 
   return days.map(day => {
-    const dayTasks = myTasks.filter(t => t.day === day).sort((a,b) => a.timeStart.localeCompare(b.timeStart));
+const dayTasks = myTasks.filter(t => t.day === day).sort((a,b) => timeToMinutes(a.timeStart) - timeToMinutes(b.timeStart));
     if (!dayTasks.length) return '';
 
     return `
@@ -4261,7 +4310,7 @@ function generatePublicCateringHtml(myMeals, ev) {
           <div style="font-weight: bold; font-size: 0.9rem; color: #10B981;">${formatDateShort(day)}</div>
         </div>
         <div style="padding: 10px; display:flex; flex-direction:column; gap:8px;">
-          ${dayMeals.sort((a,b) => a.time.localeCompare(b.time)).map(m => `
+${dayMeals.sort((a,b) => timeToMinutes(a.time) - timeToMinutes(b.time)).map(m => `
             <div style="background:#252438; padding:10px; border-radius:8px; border-left:3px solid #10B981;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="font-size:0.85rem; font-weight:700;">${MEAL_ICONS[m.type] || '🍴'} ${m.type.toUpperCase()}</span>
@@ -4278,10 +4327,20 @@ function generatePublicCateringHtml(myMeals, ev) {
 }
 
 
+
 // 4. PLANNING VISUEL MOBILE
+
 function generatePublicPlanningHtml(myTasks, ev) {
   const days = getEventDays(ev);
   if (!myTasks.length) return `<div style="color:#6B6890; padding:20px;">Aucune tâche assignée.</div>`;
+
+  // 1. AJOUT : La fonction mathématique pour le tri des nuits
+  const getSortMinutes = (timeStr) => {
+    if (!timeStr) return 0;
+    let [h, m] = timeStr.split(':').map(Number);
+    if (h < 6) h += 24; // 01h00 devient 25h00
+    return (h * 60) + (m || 0);
+  };
 
   return days.map(day => {
     const dayTasks = myTasks.filter(t => t.day === day);
@@ -4293,16 +4352,21 @@ function generatePublicPlanningHtml(myTasks, ev) {
           <div style="font-weight: bold; font-size: 1rem;">${formatDateShort(day)}</div>
         </div>
         <div style="padding: 10px; display:flex; flex-direction:column; gap:8px;">
-          ${dayTasks.sort((a,b) => a.timeStart.localeCompare(b.timeStart)).map(t => `
+          
+          <!-- 2. MODIFICATION : On utilise getSortMinutes au lieu de localeCompare -->
+          ${dayTasks.sort((a,b) => getSortMinutes(a.timeStart) - getSortMinutes(b.timeStart)).map(t => `
             <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:4px solid ${t.color}; padding:10px; border-radius:4px; cursor:pointer;">
               <div style="font-size:0.75rem; font-weight:800; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
               <div style="font-weight:700; font-size:0.9rem; margin-top:2px;">${t.title}</div>
             </div>
           `).join('')}
+          
         </div>
       </div>`;
   }).join('');
 }
+
+
 
 async function confirmDeleteTask() {
   const editId = document.getElementById('tkEditId').value;
@@ -5312,21 +5376,36 @@ function renderProductionDashboard() {
     }
   });
 }
-
-
-// =============================================
 // =============================================
 // INIT
 // =============================================
-window.addEventListener('load', async () => {
-  await STORE.loadAllEvents(); 
-  
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('public')) {
-    showPublicTeam(params.get('public'));
-  } else {
-    showHome();
-  }
+let isFirstLoad = true; // Sécurité pour empêcher le retour à l'accueil
+
+window.addEventListener('load', () => {
+  STORE.loadAllEvents(() => {
+    
+    // 1. AU PREMIER CHARGEMENT DE LA PAGE
+    if (isFirstLoad) {
+      isFirstLoad = false; 
+      
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('public')) {
+        // (La fonction showPublicTeam n'existe plus dans cette version, on gère avec le mode Live)
+      } else if (document.getElementById('viewHome')) {
+        showHome();
+      }
+    } 
+    // 2. LORS D'UNE SAUVEGARDE OU SUPPRESSION (Mise à jour en temps réel)
+    else {
+      // On rafraîchit simplement l'écran où on se trouve
+      if (typeof currentEventId !== 'undefined' && currentEventId) {
+        renderTab(currentTab); 
+      } else if (document.getElementById('viewHome')?.classList.contains('active')) {
+        renderHome();
+      }
+    }
+    
+  });
 });
 </script>
 </body>
