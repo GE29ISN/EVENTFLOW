@@ -4073,10 +4073,6 @@ const dayTasks = myTasks.filter(t => t.day === day).sort((a,b) => timeToMinutes(
   }).join('');
 }
 
-// =============================================
-// PUBLIC VIEW: PERSONAL DASHBOARD (VERSION COMPLÈTE)
-// =============================================
-
 function renderTechDetail(personId) {
   const ev = window.PUBLIC_EV;
   const person = ev.personnel.find(p => p.id === personId);
@@ -4084,19 +4080,44 @@ function renderTechDetail(personId) {
 
   const myTasks = (ev.planning || []).filter(t => t.persons && t.persons.includes(personId));
   const myMeals = (ev.catering || []).filter(m => m.persons && m.persons.includes(personId));
+  
+  // 🏨 LOGIQUE LOGEMENT (Version avec .some pour matcher ta base)
   const myLogement = (ev.logements || []).find(l => l.persons && l.persons.some(occ => occ.id === personId));
   
-  // LOGIQUE VÉHICULE
+  let roommatesList = "";
+  if (myLogement) {
+    // On récupère les prénoms des autres personnes dans le logement
+    roommatesList = myLogement.persons
+      .filter(occ => occ.id !== personId) // On exclut le technicien actuel
+      .map(occ => {
+        const p = ev.personnel.find(x => x.id === occ.id);
+        return p ? p.prenom : "Inconnu";
+      })
+      .join(', ');
+  }
+
+  // 🚗 LOGIQUE VÉHICULE (Avec gestion des notes)
   const myVehicle = (ev.vehicles || []).find(v => v.driver === personId || (v.passengers && v.passengers.includes(personId)));
   let vehicleInfo = '<div style="color:#6B6890; font-size:0.75rem;">Non assigné.</div>';
+  
   if (myVehicle) {
     const isDriver = myVehicle.driver === personId;
+    const vNoteHtml = myVehicle.notes ? `<div style="font-size:0.65rem; color:#A9A6C3; margin-top:5px; border-top:1px solid #2D2B45; padding-top:5px; font-style:italic;">Note : ${myVehicle.notes}</div>` : '';
+    
     if (isDriver) {
       const pNames = (myVehicle.passengers || []).map(pid => ev.personnel.find(p => p.id === pid)?.prenom).filter(Boolean).join(', ');
-      vehicleInfo = `<div style="font-weight:700; font-size:0.85rem; color:#F59E0B;">🚗 CONDUCTEUR</div><div style="font-size:0.8rem; margin:2px 0;">${myVehicle.modele}</div><div style="font-size:0.7rem; color:#A9A6C3;">Passagers : ${pNames || 'Aucun'}</div>`;
+      vehicleInfo = `
+        <div style="font-weight:700; font-size:0.85rem; color:#F59E0B;">🚗 CONDUCTEUR</div>
+        <div style="font-size:0.8rem; margin:2px 0;">${myVehicle.modele}</div>
+        <div style="font-size:0.7rem; color:#A9A6C3;">Passagers : ${pNames || 'Aucun'}</div>
+        ${vNoteHtml}`;
     } else {
       const drv = ev.personnel.find(p => p.id === myVehicle.driver);
-      vehicleInfo = `<div style="font-weight:700; font-size:0.85rem; color:#A9A6C3;">🛋️ PASSAGER</div><div style="font-size:0.8rem; margin:2px 0;">${myVehicle.modele}</div><div style="font-size:0.7rem; color:#A9A6C3;">Chauffeur : ${drv ? drv.prenom : 'NC'}</div>`;
+      vehicleInfo = `
+        <div style="font-weight:700; font-size:0.85rem; color:#A9A6C3;">🛋️ PASSAGER</div>
+        <div style="font-size:0.8rem; margin:2px 0;">${myVehicle.modele}</div>
+        <div style="font-size:0.7rem; color:#A9A6C3;">Chauffeur : ${drv ? drv.prenom : 'NC'}</div>
+        ${vNoteHtml}`;
     }
   }
 
@@ -4112,7 +4133,6 @@ function renderTechDetail(personId) {
 
     <div style="max-width: 900px; margin: 0 auto; padding: 20px; font-family: 'Inter', sans-serif; background: #0F0E17; color: #F8F8FF; min-height: 100vh; padding-bottom:100px;">
       
-      <!-- HEADER -->
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
         <button onclick="location.reload()" style="border:none; background:none; color:#4F46E5; font-weight:700; cursor:pointer;">← RETOUR</button>
         <span style="font-size:0.7rem; color:#6B6890; letter-spacing:1px; font-weight:800;">EVENTFLOW LIVE</span>
@@ -4120,7 +4140,7 @@ function renderTechDetail(personId) {
 
       <header style="margin-bottom: 25px; background:#1A1928; padding:20px; border-radius:16px; border: 1px solid #2D2B45;">
         <div style="display:flex; align-items:center; gap:20px;">
-          <div style="width:60px; height:60px; border-radius:50%; background:${PUB_COLORS[person.metier]}; display:flex; align-items:center; justify-content:center; color:white; font-size:1.5rem; font-weight:700;">
+          <div style="width:60px; height:60px; border-radius:50%; background:${METIER_COLORS[person.metier] || '#4F46E5'}; display:flex; align-items:center; justify-content:center; color:white; font-size:1.5rem; font-weight:700;">
             ${(person.prenom[0]+person.nom[0]).toUpperCase()}
           </div>
           <div>
@@ -4138,7 +4158,12 @@ function renderTechDetail(personId) {
           ${myLogement ? `<div>
               <div style="font-weight:700; font-size:0.85rem;">${myLogement.nom}</div>
               <div style="font-size:0.7rem; color:#A9A6C3;">${myLogement.adresse}</div>
-              ${myLogement.notes ? `<div style="font-size:0.65rem; color:#6B6890; margin-top:5px; font-style:italic;">"${myLogement.notes}"</div>` : ''}
+              
+              <div style="font-size:0.7rem; color:#A9A6C3; margin-top:5px; border-top: 1px solid #2D2B45; padding-top:4px;">
+                👥 Avec : ${roommatesList || 'Chambre seule'}
+              </div>
+
+              ${myLogement.notes ? `<div style="font-size:0.65rem; color:#6B6890; margin-top:5px; font-style:italic; border-top:1px dashed #2D2B45; padding-top:4px;">"${myLogement.notes}"</div>` : ''}
           </div>` : '<div style="color:#6B6890; font-size:0.75rem;">Non logé.</div>'}
         </div>
         <div style="background:#1A1928; padding:15px; border-radius:12px; border: 1px solid #2D2B45;">
@@ -4147,7 +4172,7 @@ function renderTechDetail(personId) {
         </div>
       </div>
 
-      <!-- PLANNING VISUEL -->
+      <!-- PLANNING -->
       <h3 style="color:#4F46E5; font-size:0.8rem; text-transform:uppercase; margin-bottom:10px;">📅 Mon Planning</h3>
       <div style="display:flex; gap:12px; overflow-x:auto; padding-bottom:15px; margin-bottom:25px;">
         ${generatePublicPlanningHtml(myTasks, ev)}
@@ -4170,7 +4195,7 @@ function renderTechDetail(personId) {
         <div id="techTeamsList" style="padding:15px; display:flex; flex-direction:column;"></div>
       </div>
 
-      <!-- SECOURS (SÉCURISÉS) -->
+      <!-- SECOURS -->
       <div style="background:rgba(239,68,68,0.05); border:1px solid #EF4444; border-radius:12px; padding:15px;">
         <h3 style="color:#EF4444; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 12px; text-align:center;">🚨 Numéros d'urgence</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
@@ -4184,7 +4209,6 @@ function renderTechDetail(personId) {
             <div style="font-size:0.6rem; color:#EF4444;">POLICE</div><div style="font-weight:900; font-size:1.1rem; color:white;">17</div>
           </div>
         </div>
-        <div style="font-size:0.6rem; color:#6B6890; text-align:center; margin-top:10px;">Saisie manuelle requise pour éviter les fausses manips.</div>
       </div>
     </div>
 
@@ -4200,6 +4224,7 @@ function renderTechDetail(personId) {
   document.body.innerHTML = html;
   setTimeout(() => filterTechTeams('all', personId), 50);
 }
+
 
 // ----------------------------------------------------
 // CATERING PUBLIC (PAR JOURS)
