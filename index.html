@@ -5,6 +5,8 @@
 
 
 
+
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -1435,191 +1437,283 @@ async function deleteCurrentEvent(){
   showHome();
 }
 
-// =============================================
-// EXPORT PDF
+
+
+// EXPORT PDF ///
+
 
 async function exportPDF() {
   const ev = await STORE.getEvent(currentEventId);
   if (!ev) return;
 
   const generateDocument = () => {
-    const days = getEventDays(ev);
-    let sectionsHtml = '';
+    let sectionsHtml = "";
 
-    const METIER_COLORS = { lumiere:'#F59E0B', son:'#3B82F6', video:'#8B5CF6', structure:'#10B981', block:'#EF4444', road:'#6B7280' };
-    const METIER_LABELS = { lumiere:'Lumière', son:'Son', video:'Vidéo', structure:'Structure', block:'Block', road:'Road' };
-    const MEAL_ICONS={'petit-dejeuner':'☕','dejeuner':'🥗','diner':'🍽️','collation':'🥪','autre':'🍴'};
-
-    // --- SECTION 1: RÉCAP ET CONTACTS ---
+    // --- CONFIGURATION DU STYLE PDF (Anti-coupure & Esthétique) ---
     sectionsHtml += `
-      <div class="print-section">
-        <div style="border-bottom: 3px solid #4F46E5; padding-bottom: 15px; margin-bottom: 20px;">
-          <h1 style="margin: 0; font-size: 2rem; color: #1a1a1a;">${ev.name.toUpperCase()}</h1>
-          <p style="margin: 5px 0 0 0; font-size: 1.1rem; color: #000;">📍 ${ev.lieu || 'Non renseigné'} | 📅 Du ${formatDate(ev.dateStart)} au ${formatDate(ev.dateEnd)}</p>
-          <p style="margin: 5px 0 0 0; font-size: 1.1rem; color: #000;">🎯 <strong>Chef de chantier :</strong> ${ev.chef || 'Non renseigné'}</p>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
+      
+      .pdf-body { font-family: 'Inter', sans-serif; color: #1a1a1a; line-height: 1.4; padding: 0; margin: 0; }
+      .pdf-page { padding: 15mm; page-break-after: always; min-height: 270mm; }
+      
+      /* Empêcher les coupures au milieu d'un bloc */
+      .no-break { page-break-inside: avoid !important; break-inside: avoid !important; margin-bottom: 20px; }
+      tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+      
+      .header-table { width: 100%; border-bottom: 4px solid #4F46E5; margin-bottom: 20px; padding-bottom: 15px; }
+      .event-title { font-size: 26px; font-weight: 800; color: #4F46E5; text-transform: uppercase; margin: 0; }
+      
+      .section-title { font-size: 14px; font-weight: 800; background: #f3f4f6; padding: 10px; border-radius: 6px; margin: 25px 0 15px 0; border-left: 5px solid #4F46E5; text-transform: uppercase; }
+      
+      table { width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: 10px; table-layout: fixed; }
+      th { background: #f9fafb; color: #4b5563; font-weight: 700; text-align: left; padding: 8px; border-bottom: 2px solid #e5e7eb; text-transform: uppercase; font-size: 9px; }
+      td { padding: 8px; border-bottom: 1px solid #f3f4f6; vertical-align: top; word-wrap: break-word; }
+      
+      .badge { padding: 3px 6px; border-radius: 4px; font-size: 8px; font-weight: 700; text-transform: uppercase; display: inline-block; }
+      .badge-blue { background: #dbeafe; color: #1e40af; }
+      .badge-red { background: #fee2e2; color: #991b1b; }
+      .badge-gray { background: #f3f4f6; color: #374151; }
+      
+      .emergency-box { background: #fef2f2; border: 2px solid #ef4444; border-radius: 10px; padding: 15px; margin-top: 20px; }
+      .planning-day-header { background: #4F46E5; color: white; padding: 8px 12px; border-radius: 6px; font-weight: 800; font-size: 12px; margin: 15px 0 10px 0; }
+      
+      .info-label { color: #6b7280; font-size: 9px; text-transform: uppercase; font-weight: 700; }
+      .info-value { font-weight: 700; font-size: 11px; margin-bottom: 10px; }
+    </style>
+    
+    <div class="pdf-body">
+      <!-- PAGE 1 : INFOS GÉNÉRALES & URGENCE -->
+      <div class="pdf-page">
+        <table class="header-table">
+          <tr>
+            <td>
+              <h1 class="event-title">${ev.name}</h1>
+              <div style="font-size: 12px; color: #6b7280; font-weight: 700;">Dossier de Production Technique</div>
+            </td>
+            <td style="text-align: right; vertical-align: bottom; font-size: 10px; font-weight: 700;">
+              Exporté le ${new Date().toLocaleDateString('fr-FR')}
+            </td>
+          </tr>
+        </table>
+
+        <div class="no-break">
+          <div class="section-title">📍 Informations générales</div>
+          <table style="border:none;">
+            <tr>
+              <td width="50%">
+                <div class="info-label">Lieu</div><div class="info-value">${ev.lieu || '-'}</div>
+                <div class="info-label">Dates</div><div class="info-value">Du ${formatDate(ev.dateStart)} au ${formatDate(ev.dateEnd)}</div>
+                <div class="info-label">Chef de chantier</div><div class="info-value">${ev.chef || '-'}</div>
+              </td>
+              <td width="50%">
+                <div class="info-label">Adresse Site</div><div class="info-value">${ev.acces?.adresse || '-'}</div>
+                <div class="info-label">Parking</div><div class="info-value">${ev.acces?.parking || '-'}</div>
+                <div class="info-label">Notes Accès</div><div class="info-value">${ev.acces?.notes || '-'}</div>
+              </td>
+            </tr>
+          </table>
         </div>
-        <h2 style="background: #4F46E5; color: white; padding: 8px 12px; font-size: 1.1rem; text-transform: uppercase;">📞 Contacts des Équipes</h2>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 15px;">`;
 
-    const personnel = ev.personnel || [];
-    const groupedMetier = {};
-    personnel.forEach(p => {
-      if (!groupedMetier[p.metier]) groupedMetier[p.metier] = [];
-      groupedMetier[p.metier].push(p);
-    });
-
-    Object.entries(groupedMetier).forEach(([metier, persons]) => {
-      sectionsHtml += `<div style="border: 1px solid #ddd; padding: 10px; border-top: 4px solid ${METIER_COLORS[metier] || '#4F46E5'}; page-break-inside: avoid; color: #000;">
-        <h3 style="margin: 0 0 10px 0; font-size: 1rem;">${METIER_LABELS[metier] || metier}</h3>`;
-      persons.forEach(p => {
-        sectionsHtml += `<div style="margin-bottom: 5px; font-size: 0.9rem;">
-          <strong>${p.prenom} ${p.nom.toUpperCase()}</strong><br>
-          <span style="font-family: monospace;">${p.tel || 'Pas de numéro'}</span>
-        </div>`;
-      });
-      sectionsHtml += `</div>`;
-    });
-    sectionsHtml += `</div></div><div class="html2pdf__page-break"></div>`;
-
-    // --- SECTION 2: PLANNING VISUEL (Avec Repas) ---
-    const metiersPresents = [...new Set(personnel.map(p => p.metier))];
-    if(metiersPresents.length === 0) metiersPresents.push('lumiere','son','video','structure');
-    const START_HOUR = 6, END_HOUR = 26, TOTAL_HOURS = 20, HOUR_H = 30;
-
-    days.forEach(day => {
-      const dayTasks = (ev.planning || []).filter(t => t.day === day);
-      const dayMeals = (ev.catering || []).filter(m => m.day === day && m.time);
-
-      sectionsHtml += `<div class="print-section">
-        <h2 style="background: #4F46E5; color: white; padding: 8px 12px; font-size: 1.1rem; text-transform: uppercase; margin-bottom: 10px;">📅 Planning : ${formatDate(day)}</h2>
-        <div style="display: flex; border: 1px solid #ddd; background: #fafafa; border-radius: 4px;">
-          <div style="width: 50px; border-right: 1px solid #ddd;">
-            <div style="height: 30px; border-bottom: 2px solid #ccc;"></div>`;
-            for(let h = START_HOUR; h < END_HOUR; h++) {
-              sectionsHtml += `<div style="height: ${HOUR_H}px; text-align: right; padding-right: 5px; font-size: 0.7rem; color: #000; border-top: 1px solid #eee;">${h >= 24 ? h-24 : h}:00</div>`;
-            }
-      sectionsHtml += `</div><div style="flex: 1; display: flex;">`;
-
-      metiersPresents.forEach(metier => {
-        const colTasks = dayTasks.filter(t => (t.metiers && t.metiers.includes(metier)) || t.metier === metier);
-        
-        // Filtrer les repas pour cette colonne
-        const colMeals = dayMeals.filter(m => {
-          if (!m.persons || m.persons.length === 0) return true;
-          const guests = personnel.filter(p => m.persons.includes(p.id));
-          return guests.some(p => p.metier === metier);
-        });
-
-        sectionsHtml += `<div style="flex: 1; border-right: 1px solid #ddd; position: relative; min-height: ${TOTAL_HOURS * HOUR_H}px; background: white;">
-          <div style="height: 30px; border-bottom: 2px solid ${METIER_COLORS[metier] || '#ccc'}; text-align: center; font-weight: bold; font-size: 0.8rem; line-height: 30px; color: #000;">${metier.toUpperCase()}</div>`;
-          
-          // Dessiner Tâches
-          colTasks.forEach(task => {
-            let [sh, sm] = task.timeStart.split(':').map(Number);
-            let [eh, em] = task.timeEnd.split(':').map(Number);
-            let s = (sh < START_HOUR ? sh+24 : sh)*60+sm, e = (eh < START_HOUR ? eh+24 : eh)*60+em;
-            let t = 30 + ((s - START_HOUR*60)/60 * HOUR_H), h = ((e-s)/60 * HOUR_H);
-            sectionsHtml += `<div style="position: absolute; left: 2px; right: 2px; top: ${t}px; height: ${h}px; background: ${task.color}; color: white; padding: 2px; font-size: 0.65rem; border-radius: 3px; border: 1px solid rgba(0,0,0,0.1); overflow: hidden;"><strong>${task.timeStart}</strong> ${task.title}</div>`;
-          });
-
-          // Dessiner Repas (Vert pointillés)
-          colMeals.forEach(meal => {
-            let [mh, mm] = meal.time.split(':').map(Number);
-            let s = (mh < START_HOUR ? mh+24 : mh)*60+mm;
-            let t = 30 + ((s - START_HOUR*60)/60 * HOUR_H);
-            sectionsHtml += `<div style="position: absolute; left: 2px; right: 2px; top: ${t}px; height: 25px; background: #f0fdf4; border: 1.5px dashed #10B981; color: #166534; padding: 2px; font-size: 0.65rem; border-radius: 3px; z-index: 10;">${MEAL_ICONS[meal.type] || '🍴'} ${meal.time} ${meal.type}</div>`;
-          });
-        sectionsHtml += `</div>`;
-      });
-      sectionsHtml += `</div></div></div><div class="html2pdf__page-break"></div>`;
-    });
-
-    // --- SECTION 3: CATERING (Recap détaillé) ---
-    sectionsHtml += `<div class="print-section"><h2 style="background: #4F46E5; color: white; padding: 8px 12px; font-size: 1.1rem; text-transform: uppercase;">🍽️ Catering Recap</h2>`;
-    days.forEach(day => {
-      const meals = (ev.catering || []).filter(m => m.day === day);
-      if(!meals.length) return;
-      sectionsHtml += `<h3 style="color:#000; border-bottom:1px solid #000; margin-top:20px">📆 ${formatDate(day)}</h3><div style="display:flex; gap:10px; flex-wrap:wrap">`;
-      meals.forEach(m => {
-        const guests = (m.persons || []).map(id => personnel.find(p => p.id === id)).filter(Boolean);
-        sectionsHtml += `<div style="flex:1; min-width:200px; border:1px solid #ddd; padding:10px; background:#fafafa; color:#000; border-radius:5px">
-          <strong style="color:#4F46E5">${m.type.toUpperCase()} - ${m.time}</strong><br>
-          <span style="background:#10B981; color:white; padding:1px 5px; border-radius:10px; font-size:0.8rem">Total: ${guests.length} repas</span><br>
-          <div style="font-size:0.8rem; margin-top:5px">${guests.map(p => `• ${p.prenom} ${p.nom.toUpperCase()} ${p.allergies ? `<span style="color:red">(⚠️${p.allergies})</span>`:''}`).join('<br>')}</div>
-        </div>`;
-      });
-      sectionsHtml += `</div>`;
-    });
-    sectionsHtml += `</div><div class="html2pdf__page-break"></div>`;
-
-    // --- SECTION 5: HÉBERGEMENT (STYLE CAPTURE 1) ---
-    sectionsHtml += `
-      <div class="print-section">
-        <h2 style="background: #4F46E5; color: white; padding: 8px 12px; font-size: 1.1rem; text-transform: uppercase; display: flex; align-items: center;">🏨 HÉBERGEMENT</h2>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">`;
-    (ev.logements || []).forEach(lg => {
-      const occupants = (lg.persons || []).map(o => personnel.find(p => p.id === o.id)).filter(Boolean);
-      sectionsHtml += `
-        <div style="border: 1px solid #ddd; border-radius: 6px; padding: 15px; position: relative; color: #000; page-break-inside: avoid;">
-          <h3 style="margin: 0 0 5px 0; text-transform: uppercase; font-size: 1.2rem;">${lg.nom}</h3>
-          <p style="margin: 0 0 10px 0; color: #000; font-size: 0.95rem;">📍 <span style="color: #e91e63;">📍</span> ${lg.adresse}</p>
-          <div style="display: flex; gap: 20px; font-size: 0.9rem; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-            <div><strong>Récup. Clés:</strong> ${lg.recup_cles || 'N/A'}</div>
-            <div><strong>Remise Clés:</strong> ${lg.remise_cles || 'N/A'}</div>
+        <div class="no-break">
+          <div class="emergency-box">
+            <div style="color:#ef4444; font-weight:900; font-size:14px; margin-bottom:10px; text-align:center;">🚨 SÉCURITÉ & URGENCE</div>
+            <table style="background:transparent; border:none;">
+              <tr>
+                <td style="text-align:center; border:none;"><strong>SAMU: 15</strong></td>
+                <td style="text-align:center; border:none;"><strong>POMPIERS: 18</strong></td>
+                <td style="text-align:center; border:none;"><strong>POLICE: 17</strong></td>
+              </tr>
+            </table>
+            <div style="text-align:center; font-size:10px; font-weight:700; color:#ef4444; margin-top:10px; border-top:1px solid #fca5a5; padding-top:10px;">
+              🦺 PORT DES EPI OBLIGATOIRE SUR TOUTE LA ZONE DE CHANTIER
+            </div>
           </div>
-          <div style="font-size: 0.95rem;">
-            <strong>Occupants (${occupants.length}) :</strong><br>
-            <div style="margin-top: 5px;">${occupants.map(p => `${p.prenom} ${p.nom.toUpperCase()}`).join(', ')}</div>
-          </div>
-          ${lg.notes ? `<div style="margin-top: 10px; font-size: 0.85rem; color: #666; font-style: italic;">Note: ${lg.notes}</div>` : ''}
-        </div>`;
-    });
-    sectionsHtml += `</div></div><div class="html2pdf__page-break"></div>`;
+        </div>
 
-    // --- SECTION 6: TRANSPORT MATÉRIEL (STYLE CAPTURE 2) ---
-    sectionsHtml += `
-      <div class="print-section">
-        <h2 style="background: #4F46E5; color: white; padding: 8px 12px; font-size: 1.1rem; text-transform: uppercase;">🚛 TRANSPORT MATÉRIEL</h2>
-        <div style="display: flex; flex-direction: column; gap: 1px; background: #ddd; border: 1px solid #ddd; margin-top: 15px;">`;
-    (ev.transport || []).forEach(tr => {
-      sectionsHtml += `
-        <div style="background: white; padding: 15px; display: flex; justify-content: space-between; align-items: flex-start; color: #000; page-break-inside: avoid;">
-          <div>
-            <div style="font-weight: bold; font-size: 1.1rem; margin-bottom: 4px;">${tr.societe.toUpperCase()} - ${tr.plaque.toUpperCase()}</div>
-            <div style="font-size: 0.9rem; color: #555; margin-bottom: 8px;">Type : ${tr.type || '-'} | Contenu : ${tr.contenu || '-'}</div>
-            <div style="font-size: 0.95rem;"><strong>Chauffeur :</strong> ${tr.chauffeur || 'NC'} ${tr.chauffeur_tel ? `(${tr.chauffeur_tel})` : ''}</div>
-            ${tr.notes ? `<div style="color: #d32f2f; font-size: 0.85rem; margin-top: 4px;"><strong>Note :</strong> ${tr.notes}</div>` : ''}
-          </div>
-          <div style="text-align: right; font-size: 0.95rem; min-width: 200px;">
-            <div style="margin-bottom: 5px;">Livraison : <strong>${formatDateTime(tr.livraison)}</strong></div>
-            <div>Récupération : <strong>${formatDateTime(tr.recup)}</strong></div>
-          </div>
-        </div>`;
-    });
-    sectionsHtml += `</div></div>`;
+        <div class="no-break">
+          <div class="section-title">📞 Équipe Technique</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Prénom Nom</th>
+                <th>Métier</th>
+                <th>Poste</th>
+                <th>Téléphone</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(ev.personnel || []).sort((a,b)=>a.prenom.localeCompare(b.prenom)).map(p => `
+                <tr>
+                  <td><strong>${p.prenom} ${p.nom.toUpperCase()}</strong></td>
+                  <td>${p.metier}</td>
+                  <td>${p.poste}</td>
+                  <td><span style="font-family:monospace;">${p.tel || '-'}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
+      <!-- PAGE 2 : PLANNING CHRONOLOGIQUE -->
+      <div class="pdf-page">
+        <div class="section-title">📅 Planning Général</div>
+        ${getEventDays(ev).map(day => {
+          const tasks = (ev.planning || []).filter(t => t.day === day).sort((a,b) => a.timeStart.localeCompare(b.timeStart));
+          if(tasks.length === 0) return '';
+          return `
+            <div class="no-break">
+              <div class="planning-day-header">${formatDate(day).toUpperCase()}</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th width="15%">Horaire</th>
+                    <th width="35%">Tâche</th>
+                    <th width="25%">Équipe</th>
+                    <th width="25%">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tasks.map(t => {
+                    // NOUVEAU CODE SÉCURISÉ
+const techNames = (t.persons || [])
+  .map(id => (ev.personnel || []).find(p => String(p.id).trim() === String(id).trim()))
+  .filter(p => p) // Cette ligne supprime tout ce qui n'est pas trouvé (évite le ?)
+  .map(p => p.prenom)
+  .join(', ');
+
+                    return `
+                      <tr>
+                        <td><strong>${t.timeStart} - ${t.timeEnd}</strong></td>
+                        <td><div style="border-left:3px solid ${t.color}; padding-left:5px;"><strong>${t.title}</strong></div></td>
+                        <td><span style="font-size:8px;">${techNames || 'Non assigné'}</span></td>
+                        <td><span style="font-size:8px; color:#6b7280; font-style:italic;">${t.notes || '-'}</span></td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <!-- PAGE 3 : LOGISTIQUE (Logement, Transport, Catering) -->
+      <div class="pdf-page">
+        <div class="section-title">🏨 Hébergement & Logistique</div>
+        <div class="no-break">
+          <table>
+            <thead>
+              <tr>
+                <th width="30%">Logement / Adresse</th>
+                <th width="20%">Dates</th>
+                <th width="30%">Occupants</th>
+                <th width="20%">Clés / Parking</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(ev.logements || []).map(lg => {
+               const occupants = (lg.persons || [])
+  .map(id => (ev.personnel || []).find(p => String(p.id).trim() === String(id).trim()))
+  .filter(p => p)
+  .map(p => p.prenom)
+  .join(', ');
+                return `
+                  <tr>
+                    <td><strong>${lg.nom}</strong><br><span style="font-size:8px; color:#6b7280;">${lg.adresse}</span></td>
+                    <td>Du ${lg.dateIn || '-'}<br>Au ${lg.dateOut || '-'}</td>
+                    <td><span style="font-size:8px;">${occupants}</span></td>
+                    <td>🔑 ${lg.recupCles || '-'}<br>🅿️ ${lg.parking || 'Non'}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section-title">🚛 Transport matériel</div>
+        <div class="no-break">
+          <table>
+            <thead>
+              <tr>
+                <th>Société / Plaque</th>
+                <th>Chauffeur / Contact</th>
+                <th>Livraison / Récup</th>
+                <th>Contenu</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(ev.transport || []).map(tr => `
+                <tr>
+                  <td><strong>${tr.societe}</strong><br>${tr.plaque || '-'}</td>
+                  <td>${tr.chauffeur || '-'}<br>${tr.chauffeur_tel || '-'}</td>
+                  <td>🚚 ${formatDateTime(tr.livraison)}<br>🔄 ${formatDateTime(tr.recup)}</td>
+                  <td><span style="font-size:8px;">${tr.contenu || '-'}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section-title">🍽️ Restauration & Catering</div>
+        <div class="no-break">
+          <table>
+            <thead>
+              <tr>
+                <th>Jour</th>
+                <th>Repas</th>
+                <th>Lieu</th>
+                <th>Quantité</th>
+                <th>Allergies / Régimes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(ev.catering || []).sort((a,b)=>a.day.localeCompare(b.day)).map(m => {
+                const allergies = (m.persons || []).map(id => (ev.personnel||[]).find(p=>p.id===id)).filter(p=>p?.allergies);
+                return `
+                  <tr>
+                    <td>${formatDateShort(m.day)}</td>
+                    <td><strong>${m.type.toUpperCase()}</strong><br>${m.time || ''}</td>
+                    <td>${m.lieu || '-'}</td>
+                    <td><span class="badge badge-blue">${m.persons?.length || 0} PERSONNES</span></td>
+                    <td>${allergies.length ? `<span style="color:#ef4444; font-weight:700; font-size:8px;">⚠️ ${allergies.map(a=>`${a.prenom}(${a.allergies})`).join(', ')}</span>` : '-'}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+
+    // --- ENVOI VERS HTML2PDF ---
     const container = document.createElement('div');
-    container.innerHTML = `<div style="padding: 10px; font-family: sans-serif;">${sectionsHtml}</div>`;
+    container.innerHTML = sectionsHtml;
     document.body.appendChild(container);
 
     const opt = {
-      margin: 10,
-      filename: `EventFlow_${ev.name.replace(/\s+/g, '_')}.pdf`,
+      margin: 0,
+      filename: `PROD_${ev.name.replace(/\s+/g, '_')}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-      pagebreak: { mode: ['css', 'legacy'] }
+      html2canvas: { scale: 3, useCORS: true, letterRendering: true }, // Haute qualité
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    html2pdf().set(opt).from(container).save().then(() => document.body.removeChild(container));
+    html2pdf().set(opt).from(container).save().then(() => {
+      document.body.removeChild(container);
+    });
   };
 
+  // Chargement de la librairie html2pdf
   if (typeof html2pdf === 'undefined') {
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
     script.onload = generateDocument;
     document.head.appendChild(script);
-  } else { generateDocument(); }
+  } else {
+    generateDocument();
+  }
 }
 
 
@@ -4049,27 +4143,48 @@ window.addEventListener('load', () => {
 // ----------------------------------------------------
 function generatePublicPlanningHtml(myTasks, ev) {
   const days = getEventDays(ev);
-  if (!myTasks.length) return '<div style="color:#6B6890; font-size:0.8rem;">Aucune tâche assignée.</div>';
+  if (!myTasks.length) return `<div style="color:#6B6890; padding:20px;">Aucune tâche assignée.</div>`;
+
+  // Fonction mathématique pour le tri parfait (même de nuit : 01h00 = 25h00)
+  const getSortMinutes = (timeStr) => {
+    if (!timeStr) return 0;
+    let [h, m] = timeStr.split(':').map(Number);
+    if (h < 6) h += 24; 
+    return (h * 60) + (m || 0);
+  };
 
   return days.map(day => {
-const dayTasks = myTasks.filter(t => t.day === day).sort((a,b) => timeToMinutes(a.timeStart) - timeToMinutes(b.timeStart));
+    // 1. On récupère et on trie les tâches du jour AVEC notre super fonction
+    const dayTasks = myTasks.filter(t => t.day === day).sort((a,b) => getSortMinutes(a.timeStart) - getSortMinutes(b.timeStart));
+    
     if (!dayTasks.length) return '';
 
+    // 2. L'amplitude : la 1ère tâche (la plus tôt) et la dernière (la plus tard, même si c'est 02h du mat)
+    const firstTask = dayTasks[0];
+    const lastTask = dayTasks[dayTasks.length - 1];
+    const startLabel = firstTask.timeStart || "";
+    const endLabel = lastTask.timeEnd || "";
+    
+    // Le bloc HTML de l'amplitude
+    const amplitudeHtml = (startLabel && endLabel) 
+      ? `<div style="font-size:0.8rem; font-weight:700; color:#4F46E5; margin-top:4px;">⏱ ${startLabel} — ${endLabel}</div>` 
+      : "";
+
     return `
-      <div style="min-width:220px; background:#1A1928; border:1px solid #2D2B45; border-radius:12px; overflow:hidden; flex-shrink:0;">
-        <div style="background:#252438; padding:8px; text-align:center; font-size:0.75rem; font-weight:bold; border-bottom:1px solid #2D2B45; color:#4F46E5;">
-          ${formatDateShort(day)}
+      <div style="min-width: 260px; flex-shrink: 0; background: #1A1928; border-radius: 12px; border: 1px solid #2D2B45; overflow: hidden;">
+        <div style="background: #252438; padding: 12px; text-align: center; border-bottom: 1px solid #2D2B45;">
+          <div style="font-weight: bold; font-size: 1rem; color: white;">${formatDateShort(day)}</div>
+          ${amplitudeHtml}
         </div>
-        <div style="padding:10px; display:flex; flex-direction:column; gap:8px;">
+        <div style="padding: 10px; display:flex; flex-direction:column; gap:8px;">
           ${dayTasks.map(t => `
-            <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:3px solid ${t.color}; border-radius:6px; padding:10px; cursor:pointer;">
-              <div style="font-size:0.7rem; font-weight:bold; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
-              <div style="font-size:0.85rem; font-weight:700; margin-top:2px;">${t.title}</div>
+            <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:4px solid ${t.color}; padding:10px; border-radius:4px; cursor:pointer;">
+              <div style="font-size:0.75rem; font-weight:800; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
+              <div style="font-weight:700; font-size:0.9rem; margin-top:2px; color:white;">${t.title}</div>
             </div>
           `).join('')}
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
 }
 
@@ -4352,44 +4467,6 @@ ${dayMeals.sort((a,b) => timeToMinutes(a.time) - timeToMinutes(b.time)).map(m =>
 }
 
 
-
-// 4. PLANNING VISUEL MOBILE
-
-function generatePublicPlanningHtml(myTasks, ev) {
-  const days = getEventDays(ev);
-  if (!myTasks.length) return `<div style="color:#6B6890; padding:20px;">Aucune tâche assignée.</div>`;
-
-  // 1. AJOUT : La fonction mathématique pour le tri des nuits
-  const getSortMinutes = (timeStr) => {
-    if (!timeStr) return 0;
-    let [h, m] = timeStr.split(':').map(Number);
-    if (h < 6) h += 24; // 01h00 devient 25h00
-    return (h * 60) + (m || 0);
-  };
-
-  return days.map(day => {
-    const dayTasks = myTasks.filter(t => t.day === day);
-    if (!dayTasks.length) return '';
-
-    return `
-      <div style="min-width: 260px; flex-shrink: 0; background: #1A1928; border-radius: 12px; border: 1px solid #2D2B45; overflow: hidden;">
-        <div style="background: #252438; padding: 12px; text-align: center; border-bottom: 1px solid #2D2B45;">
-          <div style="font-weight: bold; font-size: 1rem;">${formatDateShort(day)}</div>
-        </div>
-        <div style="padding: 10px; display:flex; flex-direction:column; gap:8px;">
-          
-          <!-- 2. MODIFICATION : On utilise getSortMinutes au lieu de localeCompare -->
-          ${dayTasks.sort((a,b) => getSortMinutes(a.timeStart) - getSortMinutes(b.timeStart)).map(t => `
-            <div onclick="openPubTaskModal('${t.id}')" style="background:${t.color}22; border-left:4px solid ${t.color}; padding:10px; border-radius:4px; cursor:pointer;">
-              <div style="font-size:0.75rem; font-weight:800; color:${t.color};">${t.timeStart} - ${t.timeEnd}</div>
-              <div style="font-weight:700; font-size:0.9rem; margin-top:2px;">${t.title}</div>
-            </div>
-          `).join('')}
-          
-        </div>
-      </div>`;
-  }).join('');
-}
 
 
 
